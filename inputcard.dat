@@ -1,10 +1,12 @@
 cme 100
 weight no
 seed 5234
-isr yes
+isr no
 evsave ciao.dat
-muthcutmin 100
-muthcutmax 120
+thmucutmin 0
+thmucutmax 180
 qqcutmin 0
 qqcutmax 800
+ngen 10
+nmax 10
 
