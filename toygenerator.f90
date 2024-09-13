@@ -10,6 +10,7 @@ module numeric
     real(r14), parameter :: gev2nbarn = 389379.292  ! Conversion from GeV^2 to nbarn
     real(r14), parameter :: degtorad = pi/180.  ! Conversion from degrees to radians
     real(r14), parameter :: radtodeg = 180./pi  ! Conversion from radians to degrees
+    real(r14), parameter :: qqmin = 4.*mmu*mmu ! Minimum invariant mass squared of the mu-mu system
 
 
 
@@ -22,10 +23,10 @@ module inputs
     use numeric
     implicit none
     character(len = 100) :: cardname, readline, opt, optval, evsave = '', histsave = ''  !!! extend it to be flexible
-    integer :: nargs, iu, ios, seed(8)
+    integer :: nargs, iu, ios, seed(8), nbins = -999 !!! Add messages for when the necessary arguments are not initialised (-999)
     integer(i10) :: ngen = -999, nmax = -999
     logical :: exists, wghtopt = .false., isr = .false.
-    real(r14) :: cme = -999, thmucutmin = 0, thmucutmax = 180, qqcutmin = 0, qqcutmax = -999, sinv
+    real(r14) :: cme = -999, thmucutmin = 0, thmucutmax = 180, qqcutmin = 0, qqcutmax = -999, sinv, gmin = 0
 
     contains
         subroutine loadinput() 
@@ -95,6 +96,19 @@ module inputs
                         endif
                         if (seed(1)<0) then
                             print*, "Input error! Seed of the generation 'seed' MUST be positive! Aborting..."
+                            print *, ""
+                            stop
+                        endif
+
+                    else if (opt == 'nbins') then
+                        read(optval, *, iostat=ios) nbins
+                        if (ios /= 0) then
+                            print *, "Input error! Value given for 'nbins' is not valid! Aborting..."
+                            print *, ""
+                            stop
+                        endif
+                        if (seed(1)<=0) then
+                            print*, "Input error! Number of histogram bins 'nbins' MUST be at least 1! Aborting..."
                             print *, ""
                             stop
                         endif
@@ -183,6 +197,19 @@ module inputs
                             print *, ""
                             stop
                         endif
+                    else if (opt == 'gmin') then
+                        read(optval, *, iostat=ios) gmin
+                        if (ios /= 0) then
+                            print *, "Input error! Value given for 'gmin' is not valid! Aborting..."
+                            print *, ""
+                            stop
+                        endif
+                        if (gmin < 0) then
+                            print*, "Input error! Minimum energy of isr photon"&
+                            " 'gmin' (",gmin, ") MUST be positive [GeV^2]! Aborting..."
+                            print *, ""
+                            stop
+                        endif
                     else if (opt == 'qqcutmax') then
                         read(optval, *, iostat=ios) qqcutmax
                         if (ios /= 0) then
@@ -207,6 +234,7 @@ module inputs
             ! Processing of loaded input
 
             sinv = cme**2
+            qqmax = sinv-2.*sqrt(sinv)*gmin ! Maximum invariant mass squared of the mu-mu system
 
             if (qqcutmax == -999) qqcutmax = sinv !!! Numerical problem?
 
@@ -248,74 +276,6 @@ real(r14) function inverseCDF(x) !!! Putting it inside the module eventgen doesn
     
 end function inverseCDF
 
-module eventgen
-
-    use numeric
-    use inputs
-    
-    implicit none
-    real(r14) :: intemax = 1., tmpmin = 0., tmpmax = 0., sinthmu, phimu, cosphimu, sinphimu
-    real(r14) :: pmod1, pmod2
-    real(r14) :: rndm(2)
-    real(r14), allocatable :: pmu1(:,:), pmu2(:,:), pgamma(:,:), costhmu(:), qq(:)
-    integer(i10)  :: naccpt = 0, iev
-    integer :: run
-    logical :: accepted
-
-
-
-    contains
-
-        subroutine genborn()
-
-            call bornthetmu()
-            call bornphimu()
-            
-            pmu1(iev,4) = cme/2
-
-            pmod1 = sqrt( pmu1(iev,4)**2 - mmu**2 )
-
-            pmu1(iev,1) = pmod1 * sinthmu * cosphimu
-            pmu1(iev,2) = pmod1 * sinthmu * sinphimu
-            pmu1(iev,3) = pmod1 * costhmu(iev)
-
-            pmu2(iev,1) = -pmu1(iev,1)
-            pmu2(iev,2) = -pmu1(iev,2)
-            pmu2(iev,3) = -pmu1(iev,3)
-            
-            
-        end subroutine genborn
-        
-        subroutine bornthetmu
-            real(r14) :: inverseCDF
-            costhmu(iev) = inverseCDF(rndm(1))
-            sinthmu = sqrt(1.0_r14-costhmu(iev)**2)
-            
-        end subroutine bornthetmu
-
-        subroutine bornphimu
-            phimu = 2*pi*rndm(2)
-            cosphimu = cos(phimu)
-            sinphimu = sin(phimu)
-            
-        end subroutine bornphimu
-
-        subroutine testcuts
-
-            if(isr .eqv. .false.) then
-
-                if ( costhmu(iev) <= cos(thmucutmin * degtorad) .and. costhmu(iev) >= cos(thmucutmax * degtorad)) then
-                    accepted = .true.
-                else
-                    accepted = .false.
-                end if
-
-            endif
-            
-        end subroutine testcuts
-    
-
-end module eventgen
 
 module histogram
 
@@ -326,7 +286,7 @@ module histogram
     real(r14) :: ene1_max, pmod1_max 
     integer :: allerr
     contains
-        subroutine inithistosborn()
+        subroutine inithistsborn()
 
             ene1_max = cme/2
             pmod1_max = sqrt(ene1_max**2-mmu**2)
@@ -343,18 +303,207 @@ module histogram
                 stop
             endif
             
-        end subroutine inithistosborn
+        end subroutine inithistsborn
+
+        subroutine updatehist(hist,histmin,histmax,val)
+            real(r14), intent(inout) :: hist(:,:) 
+            real(r14), intent(in) :: histmin,histmax,val
+            integer :: bin
+
+            bin = val/(histmax-histmin)*nbins
+            hist(bin,1) = hist(bin,1) + 1
+            
+        end subroutine updatehist
     
 
 end module histogram
 
+module eventgen
+
+    use numeric
+    use inputs
+    use histogram
+    implicit none
+    real(r14) :: intemax = 1., tmpmin = 0., tmpmax = 0., sinthmu, phimu, cosphimu, sinphimu
+    real(r14) :: rndm(3), jacqq, jacgam
+    real(r14), allocatable :: pmu1(:,:), pmu2(:,:), pmod1(:), pmod2(:), pgam(:,:), costhmu1(:), &
+    costhmu2(:), costhgam(:), qq(:), accpt(:), wght(:) ! Reduce to fewer higher dimensional arrays 
+    integer(i10)  :: naccpt = 0, iev
+    integer :: run
+    logical :: accepted
+
+
+
+    contains
+
+        subroutine genborn()
+
+            call bornmuangles()
+            
+            pmu1(iev,4) = cme/2
+
+            pmod1(iev) = sqrt( pmu1(iev,4)**2 - mmu**2 )
+
+            pmu1(iev,1) = pmod1(iev) * sinthmu * cosphimu
+            pmu1(iev,2) = pmod1(iev) * sinthmu * sinphimu
+            pmu1(iev,3) = pmod1(iev) * costhmu1(iev)
+
+            if (histsave /= '') then
+            
+                call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)))
+            
+            endif
+            
+            
+        end subroutine genborn
+
+        subroutine bornmuangles
+            real(r14) :: inverseCDF
+            costhmu1(iev) = inverseCDF(rndm(1))
+            sinthmu = sqrt(1.0_r14-costhmu1(iev)**2)
+            phimu = 2*pi*rndm(2)
+            cosphimu = cos(phimu)
+            sinphimu = sin(phimu)
+            
+        end subroutine bornmuangles
+
+        subroutine genisr()
+
+            call isrqq()
+            call isrgamma()
+            
+            pmu1(iev,4) = cme/2
+
+            pmod1(iev) = sqrt( pmu1(iev,4)**2 - mmu**2 )
+
+            pmu1(iev,1) = pmod1(iev) * sinthmu * cosphimu
+            pmu1(iev,2) = pmod1(iev) * sinthmu * sinphimu
+            pmu1(iev,3) = pmod1(iev) * costhmu1(iev)
+
+            if (histsave /= '') then
+            
+                call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)))
+            
+            endif
+            
+            
+        end subroutine genisr
+
+        subroutine isrqq
+
+            real(r14) :: fak1, amin, amax, a, bmin, b, p, ppp, y
+            fak1 = -1./sinv
+            amin = fak1*log(sinv-qqmin)
+            amax = fak1*log(sinv-qqmax)
+            a = amax-amin
+            bmin = log(qqmin/sinv)/sinv
+            b    = log(qqmax/qqmin)/sinv
+            p = rndm(1)   
+            ppp  = a/(a+b)
+            if (p < ppp) then
+                y  = amin+a*x
+                qq = sinv-dExp(y/fak1)                                       
+            else
+                y  = bmin+b*x
+                qq = sinv*exp(sinv*y)
+            endif
+            jacqq = (a+b)/(1./(sinv*(sinv-qq)) + 1./sinv/qq)
+            
+        end subroutine isrqq
+
+        subroutine isrgamma
+            real(r14) :: x, phigam, b, cmin, cmax, y
+            x = rndm(2)
+            phigam = 2.*pi*rndm(3)
+            b = sqrt(1.-4.*me*me/sinv)
+            cmin = log((1.+b*cosmin)/(1.-b*cosmin))/(2.*b)
+            cmax = log((1.+b*cosmax)/(1.-b*cosmax))/(2.*b)
+            y = cmin+x*(cmax-cmin)
+            costhgam(iev) = tanh(b*y)/b
+            jacgam = 2.*pi*(1.-b*b*costheta*costheta)*(cmax-cmin)
+            return
+            
+        end subroutine isrgamma
+
+        subroutine testcuts
+
+            if(isr .eqv. .false.) then
+
+                if ( costhmu1(iev) <= cos(thmucutmin * degtorad) .and. costhmu1(iev) >= cos(thmucutmax * degtorad)) then
+                    accepted = .true.
+                else
+                    accepted = .false.
+                end if
+
+            endif
+            
+        end subroutine testcuts
+    
+
+end module eventgen
+
+module output
+
+    use numeric
+    use inputs
+    use histogram
+    use eventgen
+    implicit none
+    integer :: idx
+
+    contains
+        subroutine writevents
+            if (evsave /= '') then
+                open(newunit=iu, file=evsave, iostat=ios)
+                if (ios == 0) then
+                    print*, "Saving events to output file ", evsave
+                    if ( isr .eqv. .false. ) then
+                        write(iu, *) 'Output file of generation...' !!! More details on the generation
+                        write(iu, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
+                        'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq' !!! More details on the generation
+                        do idx = 1, ngen
+                            if (accpt(idx) == 1) then
+                                write (iu,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,4), pmod1(idx), &
+                                radtodeg*acos(costhmu1(idx)), -pmu1(idx,1), -pmu1(idx,2), -pmu1(idx,3), &
+                                pmu1(idx,4), pmod1(idx), 180-radtodeg*acos(costhmu1(idx)), sinv
+                            endif
+                        end do
+                        close(unit=iu)
+                    end if
+                    if ( isr .eqv. .true. ) then
+                        write(iu, *) 'Output file of generation...' !!! More details on the generation
+                        write(iu, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
+                        'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq', 'pgamx', 'pgamy', 'pgamz', 'Egam' !!! More details on the generation
+                        do idx = 1, ngen
+                            if (accpt(idx) == 1) then
+                                write (iu,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,4), pmod1(idx), &
+                                radtodeg*acos(costhmu1(idx)), -pmu1(idx,1), -pmu1(idx,2), -pmu1(idx,3), &
+                                pmu1(idx,4), pmod1(idx), 180-radtodeg*acos(costhmu1(idx)), sinv
+                            endif
+                        end do
+                        close(unit=iu)
+                    end if
+                else
+                    print *, 'ERROR while opening file ', evsave
+                end if
+            else    
+                return
+            endif
+            
+        end subroutine writevents
+
+    
+
+end module output
 
 
 program toygenerator
 
     use numeric
     use inputs
+    use histogram
     use eventgen
+    use output
     implicit none
     integer :: err
 
@@ -362,27 +511,35 @@ program toygenerator
 
     call random_seed(put=seed)
 
+    allocate(pmu1(ngen,4), stat=err) !!! Maybe put the ones in common outside of if
+    if (err /= 0) then
+        print *, "pmu1 array allocation request denied, aborting!"
+        print*, ""
+        stop
+    endif
+    allocate(pmod1(ngen), stat=err)
+    if (err /= 0) then
+        print *, "pmod1 array allocation request denied, aborting!"
+        print*, ""
+        stop
+    endif
+    allocate(costhmu1(ngen), stat=err)
+    if (err /= 0) then
+        print *, "costhmu1 array allocation request denied, aborting!"
+        print*, ""
+        stop
+    endif
+
     if (isr .eqv. .false.) then ! BORN CASE
 
-        allocate(pmu1(ngen,4), stat=err)
+        if (histsave /= '') call inithistsborn()
+
+        allocate(accpt(ngen), stat=err)
         if (err /= 0) then
-            print *, "pmu1 array allocation request denied, aborting!"
+            print *, "accpt array allocation request denied, aborting!"
             print*, ""
             stop
-        endif
-        allocate(pmu2(ngen,4), stat=err)
-        if (err /= 0) then
-            print *, "pmu2 array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif
-        allocate(costhmu(ngen), stat=err)
-        if (err /= 0) then
-            print *, "costhmu array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif
-        
+        endif        
 
         do iev = 1, ngen !!! THINK ABOUT PARALLELISATION
 
@@ -391,46 +548,98 @@ program toygenerator
             call testcuts()
             
             if (accepted) then
-            
-                print*, iev, radtodeg*acos(costhmu(iev))
+
+                accpt(iev) = 1
                 naccpt = naccpt + 1 
-
-
+            else
+                accpt(iev) = 0
             endif
 
+        end do
+
+        call writevents()
+
+    else
+
+        allocate(pmu2(ngen,4), stat=err) 
+        if (err /= 0) then
+            print *, "pmu1 array allocation request denied, aborting!"
+            print*, ""
+            stop
+        endif
+        allocate(pmod2(ngen), stat=err)
+        if (err /= 0) then
+            print *, "pmod1 array allocation request denied, aborting!"
+            print*, ""
+            stop
+        endif
+        allocate(costhmu2(ngen), stat=err)
+        if (err /= 0) then
+            print *, "costhmu1 array allocation request denied, aborting!"
+            print*, ""
+            stop
+        endif
+        allocate(pgam(ngen), stat=err)
+        if (err /= 0) then
+            print *, "pgam array allocation request denied, aborting!"
+            print*, ""
+            stop
+        endif
+        allocate(costhgam(ngen), stat=err)
+        if (err /= 0) then
+            print *, "costhgam array allocation request denied, aborting!"
+            print*, ""
+            stop
+        endif
+
+        if (wghtopt .eqv. .false.) then
+            allocate(accpt(ngen), stat=err)
+            if (err /= 0) then
+                print *, "accpt array allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+        else
+            allocate(wght(ngen), stat=err)
+            if (err /= 0) then
+                print *, "wght array allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+        endif
+        
+        
+        !if (histsave /= '') call inithistsisr()
+        run = 1
+
+        do iev = 1, nmax !!! Think about parallelisation
+ 
+             call random_number(rndm)
+             call genisr()
+            
+        end do
+
+         run = 2
+         intemax = tmpmax
+
+        do iev = 1, ngen
+
+            call random_number(rndm)
+            call genisr()
             
         end do
 
     endif
-
-!        run = 1
- !        do iev = 1, nmax !!! Think about parallelisation
-! 
-!             call random_number(rndm)
-!             call genborn()
-            
- !        end do
-
-!         run = 2
-!         intemax = tmpmax
-
- ! !        do iev = 1, ngen
-
- !            call random_number(rndm)
- !            call genborn()
-            
- !        end do
- !    endif
     
 
-    print '(f0.2)', cme
-    print *, wghtopt
-    print '(i0.2)', seed(1)
-    print *, evsave
-    print '(f0.2)', thmucutmin
-    print '(f0.2)', thmucutmax
-    print '(f0.2)', qqcutmin
-    print '(f0.2)', qqcutmax
+    !print '(f0.2)', cme
+    !print *, wghtopt
+    !print '(i0.2)', seed(1)
+    !print *, evsave
+    !print '(f0.2)', thmucutmin
+    !!print '(f0.2)', thmucutmax
+    !print '(f0.2)', qqcutmin
+    !print '(f0.2)', qqcutmax
 
 
 

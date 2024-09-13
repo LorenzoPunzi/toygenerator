@@ -1,4 +1,4 @@
-cme 100
+cme 10
 weight no
 seed 5234
 isr no
@@ -9,4 +9,6 @@ qqcutmin 0
 qqcutmax 800
 ngen 10
 nmax 10
+nbins 100
+histsave hist.out
 
