@@ -26,7 +26,9 @@ module inputs
     integer :: nargs, iu, ios, seed(8), nbins = -999 !!! Add messages for when the necessary arguments are not initialised (-999)
     integer(i10) :: ngen = -999, nmax = -999
     logical :: exists, wghtopt = .false., isr = .false.
-    real(r14) :: cme = -999, thmucutmin = 0, thmucutmax = 180, qqcutmin = 0, qqcutmax = -999, sinv, gmin = 0
+    real(r14) :: cme = -999, thmucutmin = 0, thmucutmax = 180, qqcutmin = 0, qqcutmax = -999, &
+    sinv, gmin = 0, qqmax, thgamcutmin = 0, thgamcutmax = 180, costhgammin, &
+    costhgammax, costhmumin, costhmumax
 
     contains
         subroutine loadinput() 
@@ -184,6 +186,32 @@ module inputs
                             print *, ""
                             stop
                         endif
+                    else if (opt == 'thgamcutmin') then
+                        read(optval, *, iostat=ios) thgamcutmin
+                        if (ios /= 0) then
+                            print *, "Input error! Value given for 'thgamcutmin' is not valid! Aborting..."
+                            print *, ""
+                            stop
+                        endif
+                        if (thgamcutmin < 0 .or. thgamcutmin > 180) then
+                            print*, "Input error! Polar angle cut minumum for ISR photon 'thgamcutmin'&
+                             (",thgamcutmin, ") MUST be a real number between 0 and 180! Aborting..."
+                            print *, ""
+                            stop
+                        endif
+                    else if (opt == 'thgamcutmax') then
+                        read(optval, *, iostat=ios) thgamcutmax
+                        if (ios /= 0) then
+                            print *, "Input error! Value given for 'thgamcutmax' is not valid! Aborting..."
+                            print *, ""
+                            stop
+                        endif
+                        if (thgamcutmax < 0 .or. thgamcutmax > 180) then
+                            print*, "Input error! Polar angle cut maximum for ISR photon 'thgamcutmax'&
+                             (",thgamcutmax, ") MUST be a real number between 0 and 180! Aborting..."
+                            print *, ""
+                            stop
+                        endif
                     else if (opt == 'qqcutmin') then
                         read(optval, *, iostat=ios) qqcutmin
                         if (ios /= 0) then
@@ -235,12 +263,23 @@ module inputs
 
             sinv = cme**2
             qqmax = sinv-2.*sqrt(sinv)*gmin ! Maximum invariant mass squared of the mu-mu system
+            costhgammin = cos(radtodeg*thgamcutmax)
+            costhgammax = cos(radtodeg*thgamcutmin)
+            costhmumin = cos(radtodeg*thmucutmax)
+            costhmumax = cos(radtodeg*thmucutmin)
 
             if (qqcutmax == -999) qqcutmax = sinv !!! Numerical problem?
 
             if (thmucutmin >= thmucutmax) then
                 print '(A, f0.2, A, f0.2, A)', "Input error! 'thmucutmin' value (", thmucutmin, ")&
                 must be lower than 'thmucutmax' value (", thmucutmin, ")"
+                print *, ""
+                stop    
+            endif
+
+            if (thgamcutmin >= thgamcutmax) then
+                print '(A, f0.2, A, f0.2, A)', "Input error! 'thgamcutmin' value (", thgamcutmin, ")&
+                must be lower than 'thgamcutmax' value (", thgamcutmax, ")"
                 print *, ""
                 stop    
             endif
@@ -266,15 +305,83 @@ module inputs
 
 end module inputs
 
-real(r14) function inverseCDF(x) !!! Putting it inside the module eventgen doesn't work
+module utilities
+    use numeric
+    implicit none
 
-            use numeric
+    contains
+        function inverseCDF(x) !!! Putting it inside the module eventgen doesn't work
             real(r14), intent(in) :: x
+            real(r14) :: inverseCDF
             
             inverseCDF = 1/(2 - 4*x + sqrt(5 - 16*x + 16* x**2))**(1./3.) - (2 - 4*x +&
-             sqrt(5 - 16*x + 16*x**2))**(1./3.)
+            sqrt(5 - 16*x + 16*x**2))**(1./3.)
     
-end function inverseCDF
+        end function inverseCDF
+
+        subroutine deboost(boosted, boostvector, deboosted, ii)
+
+            real(r14), intent(inout) :: boosted(:)
+            real(r14), intent(inout) :: boostvector(:)
+            real(r14), intent(inout) :: deboosted(:,:)
+            integer(i10), intent(in) :: ii
+            real(r14) :: lormtrx(4,4), boostE, boostp, beta, gamma, boostcosth, boostsinth, &
+            boostcosphi, boostsinphi
+            integer :: k, j
+
+            boostE = boostvector(4)
+            boostp = sqrt(boostvector(1)**2+boostvector(2)**2+ boostvector(3)**2)
+            beta  = boostp/boostE
+            gamma = 1./sqrt(1.-beta**2)
+            ! Invert the spatial components since we are DEBOOSTING
+            do k = 1, 3
+               boostvector(k) = -boostvector(k)
+            end do
+            boostcosth = boostvector(3)/boostp
+            boostsinth = sqrt(1.-boostcosth**2)
+            boostcosphi   = boostvector(1)/(boostp*boostsinth)
+            boostsinphi   = boostvector(2)/(boostp*boostsinth)
+
+
+   
+            ! Fill in the Lorentz boost matrix elements in terms of theta and phi
+
+            lormtrx(1,1) = 1. + (gamma-1.) * boostsinth**2 * boostcosphi**2
+            lormtrx(1,2) = (gamma-1.) * boostsinth**2 * boostsinphi * boostcosphi
+            lormtrx(1,3) = (gamma-1.) * boostsinth * boostcosth * boostcosphi
+            lormtrx(1,4) = -gamma * beta * boostsinth * boostcosphi
+
+            lormtrx(2,1) = (gamma-1.) * boostsinth**2 * boostsinphi * boostcosphi
+            lormtrx(2,2) = 1. + (gamma-1.) * boostsinth**2 * boostsinphi**2
+            lormtrx(2,3) = (gamma-1.) * boostsinth * boostcosth * boostsinphi
+            lormtrx(2,4) = -gamma * beta * boostsinth * boostsinphi
+
+            lormtrx(3,1) = (gamma-1.) * boostsinth * boostcosth * boostcosphi
+            lormtrx(3,2) = (gamma-1.) * boostsinth * boostcosth * boostsinphi
+            lormtrx(3,3) = 1. + (gamma-1.) * boostcosth**2
+            lormtrx(3,4) = -gamma * beta * boostcosth
+
+            lormtrx(4,1) = -gamma * beta * boostsinth * boostcosphi
+            lormtrx(4,2) = -gamma * beta * boostsinth * boostsinphi
+            lormtrx(4,3) = -gamma * beta * boostcosth
+            lormtrx(4,4) = gamma
+
+
+            do k = 1, 4
+                deboosted(ii,k) = 0.
+                do j = 1, 4
+                    deboosted(ii,k) = deboosted(ii,k)+lormtrx(k,j)*boosted(j)
+                enddo
+            enddo
+            
+            
+        end subroutine deboost
+
+
+
+
+end module utilities
+
 
 
 module histogram
@@ -282,21 +389,28 @@ module histogram
     use numeric
     use inputs
     implicit none
-    real(r14), allocatable :: h_pmod1(:,:), h_thmu1(:,:)
-    real(r14) :: ene1_max, pmod1_max 
+    real(r14), allocatable :: h_pmod1(:,:), h_emu1(:,:), h_thmu1(:,:), h_pmod2(:,:), &
+    h_thmu2(:,:), h_emu2(:,:),  h_pgam(:,:), h_thgam(:,:), h_qq(:,:)
+    real(r14) :: enemu_max, pmodmu_max, pgam_max
     integer :: allerr
     contains
-        subroutine inithistsborn()
+        subroutine inithistsborn() !!! Add other histos
 
-            ene1_max = cme/2
-            pmod1_max = sqrt(ene1_max**2-mmu**2)
-            allocate(h_pmod1(nbins,2), stat=allerr)
+            enemu_max = cme/2
+            pmodmu_max = sqrt(enemu_max**2-mmu**2)
+            allocate(h_pmod1(nbins+1,2), stat=allerr)
             if (allerr /= 0) then
                 print *, "Mu- p modulus histogram allocation request denied, aborting!"
                 print*, ""
                 stop
             endif
-            allocate(h_thmu1(nbins,2), stat=allerr)
+            allocate(h_emu1(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "Mu- energy histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_thmu1(nbins+1,2), stat=allerr)
             if (allerr /= 0) then
                 print *, "Theta mu- histogram allocation request denied, aborting!"
                 print*, ""
@@ -305,13 +419,81 @@ module histogram
             
         end subroutine inithistsborn
 
+        subroutine inithistsisr() !!! Add other histos
+
+            enemu_max = cme/2
+            pmodmu_max = sqrt(enemu_max**2-mmu**2)
+            pgam_max = cme
+            allocate(h_pmod1(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "Mu- p modulus histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_emu1(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "Mu- energy histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_thmu1(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "Theta mu- histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_pmod2(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "Mu+ p modulus histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_emu2(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "Mu+ energy histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_thmu2(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "Theta mu+ histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_qq(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "Muons invariant mass histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_pgam(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "ISR gamma energy histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(h_thgam(nbins+1,2), stat=allerr)
+            if (allerr /= 0) then
+                print *, "ISR gamma theta histogram allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+
+            
+        end subroutine inithistsisr
+
         subroutine updatehist(hist,histmin,histmax,val)
             real(r14), intent(inout) :: hist(:,:) 
             real(r14), intent(in) :: histmin,histmax,val
             integer :: bin
 
-            bin = val/(histmax-histmin)*nbins
-            hist(bin,1) = hist(bin,1) + 1
+            if (val >= histmax) then
+                hist(nbins+1,1)= hist(nbins+1,1) + 1
+            else
+                bin = int((val-histmin)/(histmax-histmin)*nbins) +1
+                hist(bin,1)= hist(bin,1) + 1
+            endif 
+            
             
         end subroutine updatehist
     
@@ -323,9 +505,11 @@ module eventgen
     use numeric
     use inputs
     use histogram
+    use utilities
     implicit none
-    real(r14) :: intemax = 1., tmpmin = 0., tmpmax = 0., sinthmu, phimu, cosphimu, sinphimu
-    real(r14) :: rndm(3), jacqq, jacgam
+    real(r14) :: inte, intemax = 1., tmpintemin = 0., tmpintemax = 0., sinthmu, phimu, cosphimu, &
+    sinphimu, sinthgam
+    real(r14) :: rndm(7), jacqq, jacgam, jacmuang, pgamvirt(4), z
     real(r14), allocatable :: pmu1(:,:), pmu2(:,:), pmod1(:), pmod2(:), pgam(:,:), costhmu1(:), &
     costhmu2(:), costhgam(:), qq(:), accpt(:), wght(:) ! Reduce to fewer higher dimensional arrays 
     integer(i10)  :: naccpt = 0, iev
@@ -348,17 +532,31 @@ module eventgen
             pmu1(iev,2) = pmod1(iev) * sinthmu * sinphimu
             pmu1(iev,3) = pmod1(iev) * costhmu1(iev)
 
-            if (histsave /= '') then
+            call testcuts()
             
-                call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)))
+            if (accepted) then
+
+                accpt(iev) = 1
+                naccpt = naccpt + 1 
+
+                if (histsave /= '') then
             
+                    call updatehist(h_pmod1, 0.0_r14, pmodmu_max, pmod1(iev))
+                    call updatehist(h_emu1, 0.0_r14, enemu_max, pmu1(iev,4))
+                    call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)))
+            
+                endif
+
+            else
+                accpt(iev) = 0
             endif
+
+            
             
             
         end subroutine genborn
 
-        subroutine bornmuangles
-            real(r14) :: inverseCDF
+        subroutine bornmuangles()
             costhmu1(iev) = inverseCDF(rndm(1))
             sinthmu = sqrt(1.0_r14-costhmu1(iev)**2)
             phimu = 2*pi*rndm(2)
@@ -369,67 +567,162 @@ module eventgen
 
         subroutine genisr()
 
-            call isrqq()
-            call isrgamma()
-            
-            pmu1(iev,4) = cme/2
+            call isrmuqq()
+            call isrgammas()
+            call isrmumom()
 
-            pmod1(iev) = sqrt( pmu1(iev,4)**2 - mmu**2 )
 
-            pmu1(iev,1) = pmod1(iev) * sinthmu * cosphimu
-            pmu1(iev,2) = pmod1(iev) * sinthmu * sinphimu
-            pmu1(iev,3) = pmod1(iev) * costhmu1(iev)
+            call testcuts()
 
-            if (histsave /= '') then
-            
-                call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)))
-            
-            endif
-            
+
+            if (accepted) then
+
+                inte = gev2nbarn*jacqq*jacgam*jacmuang/(4.*pi*sinv)!*Matrix(Leptonic,Hadronic)
+
+                if (run == 1) then
+                    if(inte > tmpintemax) tmpintemax = inte
+                    if(inte < tmpintemin) tmpintemin = inte
+                endif
+
+                if (run == 2) then
+                    
+                    if (inte > intemax) print*, "Warning: Found integrand greater than estimated maximum!"
+                    z = rndm(7)
+
+                    if ( z <= inte/intemax ) then
+                        accpt(iev) = 1
+                        naccpt = naccpt + 1 
+
+                        if (histsave /= '') then
+                    
+                            call updatehist(h_pmod1, 0.0_r14, pmodmu_max, pmod1(iev))
+                            call updatehist(h_emu1, 0.0_r14, enemu_max, pmu1(iev,4))
+                            call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)))
+                            call updatehist(h_pmod2, 0.0_r14, pmodmu_max, pmod2(iev))
+                            call updatehist(h_emu2, 0.0_r14, enemu_max, pmu2(iev,4))
+                            call updatehist(h_thmu2, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu2(iev)))
+                            call updatehist(h_pgam, 0.0_r14, pgam_max, pgam(iev,4))
+                            call updatehist(h_thgam, 0.0_r14, 180.0_r14, radtodeg*acos(costhgam(iev)))
+                            call updatehist(h_qq, 0.0_r14, qqmax, radtodeg*acos(costhmu1(iev)))
+                    
+                        endif
+                    
+                    end if
+                endif
+
+            else
+                accpt(iev) = 0
+            endif            
             
         end subroutine genisr
 
-        subroutine isrqq
+        subroutine isrmuqq()
 
-            real(r14) :: fak1, amin, amax, a, bmin, b, p, ppp, y
+            real(r14) :: x, fak1, amin, amax, a, bmin, b, p, ppp, y
+            x = rndm(1)
             fak1 = -1./sinv
             amin = fak1*log(sinv-qqmin)
             amax = fak1*log(sinv-qqmax)
             a = amax-amin
             bmin = log(qqmin/sinv)/sinv
             b    = log(qqmax/qqmin)/sinv
-            p = rndm(1)   
+            p = rndm(2)   
             ppp  = a/(a+b)
             if (p < ppp) then
                 y  = amin+a*x
-                qq = sinv-dExp(y/fak1)                                       
+                qq(iev) = sinv-exp(y/fak1)                                       
             else
                 y  = bmin+b*x
-                qq = sinv*exp(sinv*y)
-            endif
-            jacqq = (a+b)/(1./(sinv*(sinv-qq)) + 1./sinv/qq)
-            
-        end subroutine isrqq
+                qq(iev) = sinv*exp(sinv*y)
 
-        subroutine isrgamma
-            real(r14) :: x, phigam, b, cmin, cmax, y
-            x = rndm(2)
-            phigam = 2.*pi*rndm(3)
-            b = sqrt(1.-4.*me*me/sinv)
-            cmin = log((1.+b*cosmin)/(1.-b*cosmin))/(2.*b)
-            cmax = log((1.+b*cosmax)/(1.-b*cosmax))/(2.*b)
+            endif
+            jacqq = (a+b)/(1./(sinv*(sinv-qq(iev))) + 1./sinv/qq(iev))
+
+            
+        end subroutine isrmuqq
+
+        subroutine isrgammas()
+
+            real(r14) :: x, phigam, b, cmin, cmax, y, sinthgam
+            integer :: ii
+            x = rndm(3)
+            phigam = 2.*pi*rndm(4)
+            b = sqrt(1. - 4.*me*me/sinv)
+            cmin = log((1.+b*costhgammin)/(1.-b*costhgammin))/(2.*b)
+            cmax = log((1.+b*costhgammax)/(1.-b*costhgammax))/(2.*b)
             y = cmin+x*(cmax-cmin)
             costhgam(iev) = tanh(b*y)/b
-            jacgam = 2.*pi*(1.-b*b*costheta*costheta)*(cmax-cmin)
-            return
-            
-        end subroutine isrgamma
+            sinthgam = sqrt(1.-costhgam(iev)**2)
+            jacgam = 2.*pi*(1.- b**2 * costhgam(iev)**2)*(cmax-cmin)
 
-        subroutine testcuts
+            
+            pgam(iev,4) = cme/2*(1-qq(iev)/sinv)
+            pgam(iev,1) = pgam(iev,4) * sinthgam * cos(phigam)
+            pgam(iev,2) = pgam(iev,4) * sinthgam * sin(phigam)
+            pgam(iev,3) = pgam(iev,4) * costhgam(iev)
+
+            pgamvirt(4) = cme/2*(1+qq(iev)/sinv)
+            do ii = 1,3
+                pgamvirt(ii) = -pgam(iev,ii)
+            enddo
+
+            
+        end subroutine isrgammas
+
+        subroutine isrmumom()
+            
+            real(r14) :: x, costhmucm, sinthmucm, phimucm, pmodcm, tmpvect(4)
+            integer :: ii
+            x = rndm(5)
+            phimucm = 2.*pi*rndm(6)
+            costhmucm = costhmumin+(costhmumax-costhmumin)*x
+            jacmuang = 2.*pi*(costhmumax-costhmumin)
+            sinthmucm = sqrt(1.-costhmucm*costhmucm)
+            pmu1(iev,4) = sqrt(qq(iev))/2
+            pmodcm = sqrt( pmu1(iev,4)**2 - mmu**2 )
+            pmu1(iev,1) = pmodcm * sinthmucm * cos(phimucm)
+            pmu1(iev,2) = pmodcm * sinthmucm * sin(phimucm)
+            pmu1(iev,3) = pmodcm * costhmucm
+            pmu2(iev,4) = pmu1(iev,4) 
+            do ii = 1,3
+                pmu2(iev,ii) = -pmu1(iev,ii)
+            enddo
+            do ii = 1,4
+                tmpvect(ii) = pmu1(iev,ii)
+            enddo
+            call deboost(tmpvect,pgamvirt,pmu1,iev)
+
+            do ii = 1,4
+                tmpvect(ii) = pmu2(iev,ii)
+            enddo
+            call deboost(tmpvect,pgamvirt,pmu2,iev)
+
+
+            
+        end subroutine isrmumom
+
+        subroutine testcuts()
+
+            logical :: log1, log2, log3, log4
 
             if(isr .eqv. .false.) then
 
                 if ( costhmu1(iev) <= cos(thmucutmin * degtorad) .and. costhmu1(iev) >= cos(thmucutmax * degtorad)) then
+                    accepted = .true.
+                else
+                    accepted = .false.
+                end if
+
+            endif
+
+            if(isr .eqv. .true.) then
+                
+                log1 = costhmu1(iev) <= cos(thmucutmin * degtorad) .and. costhmu1(iev) >= cos(thmucutmax * degtorad)
+                log2 = qqcutmin <= qq(iev) .and. qq(iev) <= qqcutmax
+                log3 = pgam(iev,4) >= gmin
+                log4 = costhgam(iev) <= cos(thgamcutmin * degtorad) .and. costhgam(iev) >= cos(thgamcutmax * degtorad)
+
+                if ( log1 .and. log2 .and. log3 .and. log4 ) then
                     accepted = .true.
                 else
                     accepted = .false.
@@ -511,7 +804,7 @@ program toygenerator
 
     call random_seed(put=seed)
 
-    allocate(pmu1(ngen,4), stat=err) !!! Maybe put the ones in common outside of if
+    allocate(pmu1(ngen,4), stat=err) !!! Maybe only allocate the big event arrays if evsave is called
     if (err /= 0) then
         print *, "pmu1 array allocation request denied, aborting!"
         print*, ""
@@ -545,21 +838,15 @@ program toygenerator
 
             call random_number(rndm)
             call genborn()
-            call testcuts()
-            
-            if (accepted) then
 
-                accpt(iev) = 1
-                naccpt = naccpt + 1 
-            else
-                accpt(iev) = 0
-            endif
 
         end do
 
         call writevents()
 
-    else
+    else 
+
+
 
         allocate(pmu2(ngen,4), stat=err) 
         if (err /= 0) then
@@ -567,6 +854,7 @@ program toygenerator
             print*, ""
             stop
         endif
+
         allocate(pmod2(ngen), stat=err)
         if (err /= 0) then
             print *, "pmod1 array allocation request denied, aborting!"
@@ -579,7 +867,7 @@ program toygenerator
             print*, ""
             stop
         endif
-        allocate(pgam(ngen), stat=err)
+        allocate(pgam(ngen,4), stat=err)
         if (err /= 0) then
             print *, "pgam array allocation request denied, aborting!"
             print*, ""
@@ -591,8 +879,16 @@ program toygenerator
             print*, ""
             stop
         endif
+        allocate(qq(ngen), stat=err)
+        if (err /= 0) then
+            print *, "qq array allocation request denied, aborting!"
+            print*, ""
+            stop
+        endif
 
         if (wghtopt .eqv. .false.) then
+        
+
             allocate(accpt(ngen), stat=err)
             if (err /= 0) then
                 print *, "accpt array allocation request denied, aborting!"
@@ -608,19 +904,18 @@ program toygenerator
             endif
         endif
         
-        
-        !if (histsave /= '') call inithistsisr()
+        if (histsave /= '') call inithistsisr()
         run = 1
 
         do iev = 1, nmax !!! Think about parallelisation
- 
+
              call random_number(rndm)
              call genisr()
             
         end do
 
-         run = 2
-         intemax = tmpmax
+        run = 2
+        intemax = tmpintemax
 
         do iev = 1, ngen
 
@@ -628,6 +923,8 @@ program toygenerator
             call genisr()
             
         end do
+
+        call writevents()
 
     endif
     

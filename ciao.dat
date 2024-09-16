@@ -1,5 +1,2 @@
  Output file of generation...
-   px-      py-      pz-       E-    pmod-      th-      px+      py+      pz+       E+    pmod+      th+       qq
-  3.69     3.35    -0.38     5.00     5.00    94.41    -3.69    -3.35     0.38     5.00     5.00    85.59   100.00
-  2.22    -3.67    -2.57     5.00     5.00   120.89    -2.22     3.67     2.57     5.00     5.00    59.11   100.00
-  0.52     4.97    -0.09     5.00     5.00    91.00    -0.52    -4.97     0.09     5.00     5.00    89.00   100.00
+   px-      py-      pz-       E-    pmod-      th-      px+      py+      pz+       E+    pmod+      th+       qq    pgamx    pgamy    pgamz     Egam

@@ -1,14 +1,14 @@
 cme 10
+ngen 10
+nmax 10
 weight no
 seed 5234
-isr no
+isr yes
 evsave ciao.dat
 thmucutmin 0
 thmucutmax 180
 qqcutmin 0
 qqcutmax 800
-ngen 10
-nmax 10
 nbins 100
 histsave hist.out
 
