@@ -1,9 +1,9 @@
-cme 10
-ngen 10
-nmax 10
+cme 1
+ngen 3
+nmax 5
 weight no
 seed 5234
-isr yes
+isr y
 evsave ciao.dat
 thmucutmin 0
 thmucutmax 180
