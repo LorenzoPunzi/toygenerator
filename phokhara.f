@@ -1002,7 +1002,8 @@ c ====================================================================
 c --------------------------------------------------------------------
 c --- Matrix element squared: contract Leptonic and Hadronic tensors -
 c --------------------------------------------------------------------
-      double precision function Matrix(Leptonic,Hadronic) ! Still don't understand the contraction performed
+      double precision function Matrix(Leptonic,Hadronic)
+c Still don't understand the contraction performed
       include 'phokhara.inc'       
       double precision metric1,metric2,
      &  Leptonic(0:3,0:3),Hadronic(0:3,0:3)

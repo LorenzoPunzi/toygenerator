@@ -28,7 +28,7 @@ module inputs
     logical :: exists, wghtopt = .false., isr = .false.
     real(r14) :: cme = -999, thmucutmin = 0, thmucutmax = 180, qqcutmin = 0, qqcutmax = -999, &
     sinv, gmin = 0.01, qqmax, thgamcutmin = 0, thgamcutmax = 180, costhgammin, &
-    costhgammax, costhmumin, costhmumax
+    costhgammax, costhmumin, costhmumax, intemax = 1.
 
     contains
         subroutine loadinput() 
@@ -418,7 +418,7 @@ module histogram
 
             enemu_max = cme/2
             pmodmu_max = sqrt(enemu_max**2-mmu**2)
-            allocate(h_pmod1(0:nbins+1,2), stat=allerr)
+            allocate(h_pmod1(0:nbins+1,2), stat=allerr) !!! Deallocate stuff at the end
             if (allerr /= 0) then
                 print *, "Mu- p modulus histogram allocation request denied, aborting!"
                 print*, ""
@@ -436,6 +436,10 @@ module histogram
                 print*, ""
                 stop
             endif
+
+            h_pmod1 = 0.0_r14
+            h_emu1 = 0.0_r14
+            h_thmu1 = 0.0_r14
             
         end subroutine inithistsborn
 
@@ -499,25 +503,73 @@ module histogram
                 stop
             endif
 
+            h_pmod1 = 0.0_r14
+            h_emu1 = 0.0_r14
+            h_thmu1 = 0.0_r14
+            h_pmod2 = 0.0_r14
+            h_emu2 = 0.0_r14
+            h_thmu2 = 0.0_r14
+            h_qq = 0.0_r14
+            h_pgam = 0.0_r14
+            h_thgam = 0.0_r14
             
         end subroutine inithistsisr
 
-        subroutine updatehist(hist,histmin,histmax,val)
+        subroutine updatehist(hist,histmin,histmax,val,weight)
             real(r14), intent(inout) :: hist(0:,:) 
-            real(r14), intent(in) :: histmin,histmax,val
+            real(r14), intent(in) :: histmin,histmax,val,weight
             integer :: bin
 
             if (val >= histmax) then
-                hist(nbins+1,1)= hist(nbins+1,1) + 1
+                hist(nbins+1,1)= hist(nbins+1,1) + weight
+                hist(nbins+1,2)= hist(nbins+1,2) + weight**2
             else if (val< histmin) then
-                hist(0,1) = hist(0,1) + 1
+                hist(0,1) = hist(0,1) + weight
+                hist(0,2) = hist(0,2) + weight**2
             else
                 bin = int((val-histmin)/(histmax-histmin)*nbins) +1
-                hist(bin,1)= hist(bin,1) + 1
+                hist(bin,1)= hist(bin,1) + weight
+                hist(bin,2)= hist(bin,2) + weight**2
             endif 
             
             
         end subroutine updatehist
+
+        subroutine endhist(hist,histmin,histmax) !!! Review if errors are correct
+            real(r14), intent(inout) :: hist(0:,:) 
+            real(r14), intent(in) :: histmin, histmax
+            integer :: bb
+
+            do bb = 0, nbins+1
+                hist(bb,2) = sqrt(hist(bb,2))
+                !hist(bb,2) = intemax * sqrt((hist(bb,1)/ngen-(hist(bb,1)/ngen)**2)/ngen)
+                !hist(bb,1) = intemax/ngen*hist(bb,1)
+                !hist(bb,1)=hist(bb,1)*dble(nbins)/(histmax-histmin)
+                !hist(bb,2)=hist(bb,2)*dble(nbins)/(histmax-histmin)
+            enddo
+        end subroutine endhist
+
+        subroutine endhistsborn()
+
+            call endhist(h_pmod1, 0.0_r14, pmodmu_max)
+            call endhist(h_emu1, 0.0_r14, enemu_max)
+            call endhist(h_thmu1, 0.0_r14, 180.0_r14)
+            
+        end subroutine endhistsborn
+
+        subroutine endhistsisr()
+
+            call endhist(h_pmod1, 0.0_r14, pmodmu_max)
+            call endhist(h_emu1, 0.0_r14, enemu_max)
+            call endhist(h_thmu1, 0.0_r14, 180.0_r14)
+            call endhist(h_pmod2, 0.0_r14, pmodmu_max)
+            call endhist(h_emu2, 0.0_r14, enemu_max)
+            call endhist(h_thmu2, 0.0_r14, 180.0_r14)
+            call endhist(h_pgam, 0.0_r14, pgam_max)
+            call endhist(h_thgam, 0.0_r14, 180.0_r14)
+            call endhist(h_qq, 0.0_r14, qqmax)
+            
+        end subroutine endhistsisr
     
 
 end module histogram
@@ -529,12 +581,12 @@ module eventgen
     use histogram
     use utilities
     implicit none
-    real(r14) :: inte, intemax = 1., tmpintemin = 0., tmpintemax = 0., sinthmu, phimu, cosphimu, &
-    sinphimu, sinthgam, Muontensor(0:3,0:3), Electrontensor(0:3,0:3), invampl
+    real(r14) :: inte, tmpintemin = 0., tmpintemax = 0., sinthmu, phimu, cosphimu, &
+    sinphimu, sinthgam, Muontensor(0:3,0:3), Electrontensor(0:3,0:3), invampl, naccpt = 0.
     real(r14) :: rndm(7), jacqq, jacgam, jacmuang, pgamvirt(0:3), z, ppos(0:3), pel(0:3)
     real(r14), allocatable :: pmu1(:,:), pmu2(:,:), pmod1(:), pmod2(:), pgam(:,:), costhmu1(:), &
     costhmu2(:), costhgam(:), qq(:), wght(:) ! Reduce to fewer higher dimensional arrays 
-    integer(i10) :: naccpt = 0, iev
+    integer(i10) :: iev
     integer(i10), allocatable :: accpt(:)
     integer :: run
     logical :: accepted
@@ -560,13 +612,13 @@ module eventgen
             if (accepted) then
 
                 accpt(iev) = 1
-                naccpt = naccpt + 1 
+                naccpt = naccpt + 1. 
 
                 if (histsave /= '') then
             
-                    call updatehist(h_pmod1, 0.0_r14, pmodmu_max, pmod1(iev))
-                    call updatehist(h_emu1, 0.0_r14, enemu_max, pmu1(iev,0))
-                    call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)))
+                    call updatehist(h_pmod1, 0.0_r14, pmodmu_max, pmod1(iev),1.0_r14)
+                    call updatehist(h_emu1, 0.0_r14, enemu_max, pmu1(iev,0),1.0_r14)
+                    call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)),1.0_r14)
             
                 endif
 
@@ -600,7 +652,6 @@ module eventgen
 
                 inte = gev2nbarn*jacqq*jacgam*jacmuang/(4.*pi*sinv)*invampl
 
-                print*, "inte = ",inte
 
                 if (run == 1) then
                     if(inte > tmpintemax) tmpintemax = inte
@@ -608,41 +659,55 @@ module eventgen
                 endif
 
                 if (run == 2) then
-
-                !print*,  pmu1(iev,1), pmu1(iev,2), pmu1(iev,3), pmu1(iev,0), pmod1(iev), &
-                !                radtodeg*acos(costhmu1(iev)), pmu2(iev,1), pmu2(iev,2), pmu2(iev,3), &
-                !                pmu2(iev,0), pmod2(iev), radtodeg*acos(costhmu2(iev)), qq(iev), pgam(iev,1)&
-                !                , pgam(iev,2), pgam(iev,3), pgam(iev,0), radtodeg*acos(costhgam(iev))
-                print*, ""
-                print*, ""
                     
                     if (inte > intemax) print*, "Warning: Found integrand greater than estimated maximum!"
                     z = rndm(7)
-                    print*, "z = ",z," inte fraction = ", inte/intemax
+                    !print*, "z = ",z," inte fraction = ", inte/intemax
 
-                    if ( z <= inte/intemax ) then
-                        accpt(iev) = 1
-                        naccpt = naccpt + 1 
+                    if (wghtopt .eqv. .false.) then
+
+                        if ( z <= inte/intemax ) then
+                            accpt(iev) = 1
+                            naccpt = naccpt + 1.
+
+                            if (histsave /= '') then
+                        
+                            call updatehist(h_pmod1, 0.0_r14, pmodmu_max, pmod1(iev),1.0_r14)
+                            call updatehist(h_emu1, 0.0_r14, enemu_max, pmu1(iev,0),1.0_r14)
+                            call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)),1.0_r14)
+                            call updatehist(h_pmod2, 0.0_r14, pmodmu_max, pmod2(iev),1.0_r14)
+                            call updatehist(h_emu2, 0.0_r14, enemu_max, pmu2(iev,0),1.0_r14)
+                            call updatehist(h_thmu2, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu2(iev)),1.0_r14)
+                            call updatehist(h_pgam, 0.0_r14, pgam_max, pgam(iev,0),1.0_r14)
+                            call updatehist(h_thgam, 0.0_r14, 180.0_r14, radtodeg*acos(costhgam(iev)),1.0_r14)
+                            call updatehist(h_qq, 0.0_r14, qqmax, qq(iev),1.0_r14)
+                        
+                            endif
+                        
+                        end if
+                    endif
+                    if (wghtopt .eqv. .true.) then ! WEIGHTED GENERATION
+                        wght(iev) = z
+                        naccpt = naccpt + wght(iev) 
 
                         if (histsave /= '') then
                     
-                            call updatehist(h_pmod1, 0.0_r14, pmodmu_max, pmod1(iev))
-                            call updatehist(h_emu1, 0.0_r14, enemu_max, pmu1(iev,0))
-                            call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)))
-                            call updatehist(h_pmod2, 0.0_r14, pmodmu_max, pmod2(iev))
-                            call updatehist(h_emu2, 0.0_r14, enemu_max, pmu2(iev,0))
-                            call updatehist(h_thmu2, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu2(iev)))
-                            call updatehist(h_pgam, 0.0_r14, pgam_max, pgam(iev,0))
-                            call updatehist(h_thgam, 0.0_r14, 180.0_r14, radtodeg*acos(costhgam(iev)))
-                            call updatehist(h_qq, 0.0_r14, qqmax, radtodeg*acos(costhmu1(iev)))
+                        call updatehist(h_pmod1, 0.0_r14, pmodmu_max, pmod1(iev),wght(iev))
+                        call updatehist(h_emu1, 0.0_r14, enemu_max, pmu1(iev,0),wght(iev))
+                        call updatehist(h_thmu1, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu1(iev)),wght(iev))
+                        call updatehist(h_pmod2, 0.0_r14, pmodmu_max, pmod2(iev),wght(iev))
+                        call updatehist(h_emu2, 0.0_r14, enemu_max, pmu2(iev,0),wght(iev))
+                        call updatehist(h_thmu2, 0.0_r14, 180.0_r14, radtodeg*acos(costhmu2(iev)),wght(iev))
+                        call updatehist(h_pgam, 0.0_r14, pgam_max, pgam(iev,0),wght(iev))
+                        call updatehist(h_thgam, 0.0_r14, 180.0_r14, radtodeg*acos(costhgam(iev)),wght(iev))
+                        call updatehist(h_qq, 0.0_r14, qqmax, qq(iev),wght(iev))
                     
                         endif
-                    
-                    end if
-                endif
-
+                    endif
+                endif       
             else
-                accpt(iev) = 0
+                if (wghtopt .eqv. .false.) accpt(iev) = 0
+                if (wghtopt .eqv. .true.) wght(iev) = -999
             endif            
             
         end subroutine genisr
@@ -683,7 +748,7 @@ module eventgen
             endif
             jacqq = (a+b)/(1./(sinv*(sinv-qq(iev))) + 1./sinv/qq(iev))
 
-            print*, " a = ", a, " b = ", b, " qq = ", qq(iev), " y = ", y, " amax = ", amax, " ppp = ", ppp
+            !print*, " a = ", a, " b = ", b, " qq = ", qq(iev), " y = ", y, " amax = ", amax, " ppp = ", ppp
 
             
         end subroutine isrmuqq
@@ -853,7 +918,7 @@ module output
     use eventgen
     implicit none
     integer(i10) :: idx
-    integer :: ou = 5
+    integer :: ou, hu
 
     contains
         subroutine writevents
@@ -872,22 +937,36 @@ module output
                                 pmu1(idx,0), pmod1(idx), 180-radtodeg*acos(costhmu1(idx)), sinv
                             endif
                         end do
-                        close(unit=ou)
                     end if
                     if ( isr .eqv. .true. ) then
-                        write(ou, *) 'Output file of ISR generation...' !!! More details on the generation
-                        write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
-                        'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq', 'pgamx', 'pgamy', 'pgamz', 'Egam', 'thgam'
-                        do idx = 1, ngen
-                            if (accpt(idx) == 1) then
-                                write (ou,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,0), pmod1(idx), &
-                                radtodeg*acos(costhmu1(idx)), pmu2(idx,1), pmu2(idx,2), pmu2(idx,3), &
-                                pmu2(idx,0), pmod2(idx), radtodeg*acos(costhmu2(idx)), qq(idx), pgam(idx,1)&
-                                , pgam(idx,2), pgam(idx,3), pgam(idx,0), radtodeg*acos(costhgam(idx))
-                            endif
-                        end do
-                        close(unit=ou)
+                        if ( wghtopt .eqv. .false. ) then
+                            write(ou, *) 'Output file of ISR generation...' !!! More details on the generation
+                            write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
+                            'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq', 'pgamx', 'pgamy', 'pgamz', 'Egam', 'thgam'
+                            do idx = 1, ngen
+                                if (accpt(idx) == 1) then
+                                    write (ou,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,0), pmod1(idx), &
+                                    radtodeg*acos(costhmu1(idx)), pmu2(idx,1), pmu2(idx,2), pmu2(idx,3), &
+                                    pmu2(idx,0), pmod2(idx), radtodeg*acos(costhmu2(idx)), qq(idx), pgam(idx,1)&
+                                    , pgam(idx,2), pgam(idx,3), pgam(idx,0), radtodeg*acos(costhgam(idx))
+                                endif
+                            end do
+                        end if
+                        if ( wghtopt .eqv. .true. ) then
+                            write(ou, *) 'Output file of weighted ISR generation...' !!! More details on the generation
+                            write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
+                            'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq', 'pgamx', 'pgamy', 'pgamz', 'Egam', 'thgam', 'wght'
+                            do idx = 1, ngen
+                                if (wght(idx) >= 0) then
+                                    write (ou,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,0), pmod1(idx), &
+                                    radtodeg*acos(costhmu1(idx)), pmu2(idx,1), pmu2(idx,2), pmu2(idx,3), &
+                                    pmu2(idx,0), pmod2(idx), radtodeg*acos(costhmu2(idx)), qq(idx), pgam(idx,1)&
+                                    , pgam(idx,2), pgam(idx,3), pgam(idx,0), radtodeg*acos(costhgam(idx)), wght(idx)
+                                endif
+                            end do
+                        end if
                     end if
+                    close(unit=ou)
                 else
                     print *, 'ERROR while opening file ', evsave
                 end if
@@ -897,7 +976,60 @@ module output
             
         end subroutine writevents
 
-    
+        subroutine appendhist(outunit, hist, histname, histmin, histmax)
+            real(r14), intent(inout) :: hist(0:,:) 
+            real(r14), intent(in) :: histmin,histmax
+            real(r14) :: xlow, xhigh
+            character(len=*) :: histname
+            integer :: bb, outunit
+
+            write(outunit, *) histname
+            write(outunit, '(*(A12, 4x))') "binlow", "binhigh", "content", "error"
+            write (outunit,'(*(f12.3, 4x))') histmin, histmin, hist(0,1), hist(0,2)
+            do bb = 1, nbins
+                xlow = histmin + (bb-1)* (histmax-histmin)/nbins
+                xhigh = xlow + (histmax-histmin)/nbins
+                write (outunit,'(*(f12.3, 4x))') xlow, xhigh, hist(bb,1), hist(bb,2)
+            enddo          
+            write (outunit,'(*(f12.3, 4x))') histmax, histmax, hist(nbins+1,1), hist(nbins+1,2)
+            
+        end subroutine appendhist
+
+        subroutine writehists
+            if (histsave /= '') then !!! Redundant?
+                open(newunit=hu, file=histsave, iostat=ios)
+                if (ios == 0) then
+                    print*, "Saving histograms to output file ", histsave
+                    if ( isr .eqv. .false. ) then
+                        call endhistsborn()
+                        write(hu, *) 'Histogram file of Born generation...' !!! More details on the generation
+                        call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
+                        call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
+                        call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
+                    end if
+                    if ( isr .eqv. .true. ) then
+                        call endhistsisr()
+                        write(hu, *) 'Histogram file of ISR generation...' !!! More details on the generation
+                        call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
+                        call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
+                        call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
+                        call appendhist(hu, h_pmod2, "h_pmod2", 0.0_r14, pmodmu_max)
+                        call appendhist(hu, h_emu2, "h_emu2", 0.0_r14, enemu_max)
+                        call appendhist(hu, h_thmu2, "h_thmu2", 0.0_r14, 180.0_r14)
+                        call appendhist(hu, h_pgam, "h_pgam", 0.0_r14, pgam_max)
+                        call appendhist(hu, h_thgam, "h_thgam", 0.0_r14, 180.0_r14)
+                        call appendhist(hu, h_qq, "h_qq", 0.0_r14, qqmax)
+                        
+                    end if
+                    close(unit=hu)
+                else
+                    print *, 'ERROR while opening file ', evsave
+                end if
+            else    
+                return
+            endif
+            
+        end subroutine writehists
 
 end module output
 
@@ -911,6 +1043,7 @@ program toygenerator
     use output
     implicit none
     integer(i10) :: err, arraylen
+    real(r14) :: eff, sigma, dsigma, bornsigma
 
     call loadinput()
 
@@ -953,16 +1086,24 @@ program toygenerator
             call random_number(rndm)
             call genborn()
 
-
         end do
 
         call writevents()
+        call writehists()
 
-    else 
+        eff = naccpt/ngen
+        sigma = bornsigma * eff
+        dsigma = bornsigma/ngen * sqrt(ngen * eff * (1-eff))
+        print *, ""
+        print *, "--------------------------------------------"
+        print '(A, f6.2, A, f6.2, A)', "Total Born cross section = ", sigma, " +-", dsigma, " nb"
+        print *, ""
+        print '(A, f5.3)', "Generation efficiency = ", eff
+        print *, "--------------------------------------------"
 
+    else ! ISR CASE
 
-
-        allocate(pmu2(arraylen,0:3), stat=err) 
+        allocate(pmu2(arraylen,0:3), stat=err) !!! Maybe move these allocations to a subroutine
         if (err /= 0) then
             print *, "pmu1 array allocation request denied, aborting!"
             print*, ""
@@ -1002,7 +1143,6 @@ program toygenerator
 
         if (wghtopt .eqv. .false.) then
         
-
             allocate(accpt(arraylen), stat=err)
             if (err /= 0) then
                 print *, "accpt array allocation request denied, aborting!"
@@ -1030,7 +1170,6 @@ program toygenerator
 
         run = 2
         intemax = tmpintemax
-        print*, intemax
 
         do iev = 1, ngen
 
@@ -1039,19 +1178,21 @@ program toygenerator
             
         end do
         call writevents()
+        call writehists()
+
+        !sigma = integral = fraction of accepted (naccpt/ngen) * max (intemax) * range of random variables (1)  
+
+        eff = naccpt/ngen
+        sigma = intemax * eff
+        dsigma = intemax/ngen * sqrt(ngen * eff * (1-eff))
+        print *, ""
+        print *, "--------------------------------------------"
+        print '(A, f6.2, A, f6.2, A)', "Total cross section = ", sigma, " +-", dsigma, " nb"
+        print *, ""
+        print '(A, f5.3)', "Generation efficiency = ", eff
+        print *, "--------------------------------------------"
+
 
     endif
-    
-
-    !print '(f0.2)', cme
-    !print *, wghtopt
-    !print '(i0.2)', seed(1)
-    !print *, evsave
-    !print '(f0.2)', thmucutmin
-    !!print '(f0.2)', thmucutmax
-    !print '(f0.2)', qqcutmin
-    !print '(f0.2)', qqcutmax
-
-
 
 end program toygenerator

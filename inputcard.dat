@@ -1,7 +1,7 @@
 cme 1
-ngen 3
-nmax 5
-weight no
+ngen 1000
+nmax 1000
+weight y
 seed 5234
 isr y
 evsave ciao.dat
