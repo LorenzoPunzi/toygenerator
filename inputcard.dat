@@ -1,14 +1,12 @@
 cme 1
-ngen 1000
-nmax 1000
-weight y
+ngen 100000
+nmax 100000
+weight n
 seed 5234
-isr y
+isr n
 evsave ciao.dat
 thmucutmin 0
 thmucutmax 180
-qqcutmin 0
-qqcutmax 800
-nbins 100
+nbins 1000
 histsave hist.out
 

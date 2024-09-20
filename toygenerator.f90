@@ -12,6 +12,15 @@ module numeric
     real(r14), parameter :: radtodeg = 180./pi  ! Conversion from radians to degrees
     real(r14), parameter :: qqmin = 4.*mmu*mmu ! Minimum invariant mass squared of the mu-mu system
 
+    contains
+        function cubicroot(x) 
+            real(r14), intent(in) :: x
+            real(r14) :: cubicroot
+            
+            cubicroot = sign(1.0_r14, x)* (abs(x))**(1./3.)
+    
+        end function cubicroot
+
 
 
 end module numeric    
@@ -44,6 +53,7 @@ module inputs
 
             inquire(file=cardname, exist=exists)
             if(exists) then
+                print*, ""
                 print *, "Reading '" , trim(cardname), "' as input card"
                 print*, ""
             else
@@ -315,8 +325,8 @@ module utilities
             real(r14), intent(in) :: x
             real(r14) :: inverseCDF
             
-            inverseCDF = 1/(2 - 4*x + sqrt(5 - 16*x + 16* x**2))**(1./3.) - (2 - 4*x +&
-            sqrt(5 - 16*x + 16*x**2))**(1./3.)
+            inverseCDF = 1/cubicroot(2 - 4*x + sqrt(5 - 16*x + 16* x**2)) - cubicroot(2 - 4*x +&
+            sqrt(5 - 16*x + 16*x**2))
     
         end function inverseCDF
 
@@ -535,41 +545,52 @@ module histogram
             
         end subroutine updatehist
 
-        subroutine endhist(hist,histmin,histmax) !!! Review if errors are correct
+        subroutine endhistisr(hist,histmin,histmax) !!! Review if errors are correct
             real(r14), intent(inout) :: hist(0:,:) 
             real(r14), intent(in) :: histmin, histmax
             integer :: bb
 
             do bb = 0, nbins+1
-                hist(bb,2) = sqrt(hist(bb,2))
-                !hist(bb,2) = intemax * sqrt((hist(bb,1)/ngen-(hist(bb,1)/ngen)**2)/ngen)
-                !hist(bb,1) = intemax/ngen*hist(bb,1)
-                !hist(bb,1)=hist(bb,1)*dble(nbins)/(histmax-histmin)
-                !hist(bb,2)=hist(bb,2)*dble(nbins)/(histmax-histmin)
+                !hist(bb,2) = sqrt(hist(bb,2))
+                hist(bb,2) = intemax * sqrt((hist(bb,1)/ngen-(hist(bb,1)/ngen)**2)/ngen)
+                hist(bb,1) = intemax/ngen*hist(bb,1)
+                hist(bb,1)=hist(bb,1)*dble(nbins)/(histmax-histmin)
+                hist(bb,2)=hist(bb,2)*dble(nbins)/(histmax-histmin)
             enddo
-        end subroutine endhist
+        end subroutine endhistisr
 
-        subroutine endhistsborn()
+        subroutine endhistborn(hist,histmin,histmax) !!! Review if errors are correct
+            real(r14), intent(inout) :: hist(0:,:) 
+            real(r14), intent(in) :: histmin, histmax
+            integer :: bb
 
-            call endhist(h_pmod1, 0.0_r14, pmodmu_max)
-            call endhist(h_emu1, 0.0_r14, enemu_max)
-            call endhist(h_thmu1, 0.0_r14, 180.0_r14)
+            do bb = 0, nbins+1
+                hist(bb,2) = sqrt(ngen*(hist(bb,1)/ngen-(hist(bb,1)/ngen)**2))
+            enddo
+
+        end subroutine endhistborn
+
+        subroutine endbornhistos()
+
+            call endhistborn(h_pmod1, 0.0_r14, pmodmu_max)
+            call endhistborn(h_emu1, 0.0_r14, enemu_max)
+            call endhistborn(h_thmu1, 0.0_r14, 180.0_r14)
             
-        end subroutine endhistsborn
+        end subroutine endbornhistos
 
-        subroutine endhistsisr()
+        subroutine endisrhistos()
 
-            call endhist(h_pmod1, 0.0_r14, pmodmu_max)
-            call endhist(h_emu1, 0.0_r14, enemu_max)
-            call endhist(h_thmu1, 0.0_r14, 180.0_r14)
-            call endhist(h_pmod2, 0.0_r14, pmodmu_max)
-            call endhist(h_emu2, 0.0_r14, enemu_max)
-            call endhist(h_thmu2, 0.0_r14, 180.0_r14)
-            call endhist(h_pgam, 0.0_r14, pgam_max)
-            call endhist(h_thgam, 0.0_r14, 180.0_r14)
-            call endhist(h_qq, 0.0_r14, qqmax)
+            call endhistisr(h_pmod1, 0.0_r14, pmodmu_max)
+            call endhistisr(h_emu1, 0.0_r14, enemu_max)
+            call endhistisr(h_thmu1, 0.0_r14, 180.0_r14)
+            call endhistisr(h_pmod2, 0.0_r14, pmodmu_max)
+            call endhistisr(h_emu2, 0.0_r14, enemu_max)
+            call endhistisr(h_thmu2, 0.0_r14, 180.0_r14)
+            call endhistisr(h_pgam, 0.0_r14, pgam_max)
+            call endhistisr(h_thgam, 0.0_r14, 180.0_r14)
+            call endhistisr(h_qq, 0.0_r14, qqmax)
             
-        end subroutine endhistsisr
+        end subroutine endisrhistos
     
 
 end module histogram
@@ -586,14 +607,107 @@ module eventgen
     real(r14) :: rndm(7), jacqq, jacgam, jacmuang, pgamvirt(0:3), z, ppos(0:3), pel(0:3)
     real(r14), allocatable :: pmu1(:,:), pmu2(:,:), pmod1(:), pmod2(:), pgam(:,:), costhmu1(:), &
     costhmu2(:), costhgam(:), qq(:), wght(:) ! Reduce to fewer higher dimensional arrays 
-    integer(i10) :: iev
+    integer(i10) :: iev, arraylen
     integer(i10), allocatable :: accpt(:)
-    integer :: run
+    integer :: run, err
     logical :: accepted
 
 
 
     contains
+        subroutine allocarrays
+            arraylen = max(ngen,nmax)
+
+            allocate(pmu1(arraylen,0:3), stat=err) !!! Maybe only allocate the big event arrays if evsave is called
+            if (err /= 0) then
+                print *, "pmu1 array allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(pmod1(arraylen), stat=err)
+            if (err /= 0) then
+                print *, "pmod1 array allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+            allocate(costhmu1(arraylen), stat=err)
+            if (err /= 0) then
+                print *, "costhmu1 array allocation request denied, aborting!"
+                print*, ""
+                stop
+            endif
+
+            if (isr .eqv. .false.) then ! BORN CASE
+
+                allocate(accpt(arraylen), stat=err)
+                if (err /= 0) then
+                    print *, "accpt array allocation request denied, aborting!"
+                    print*, ""
+                    stop
+                endif        
+
+            else ! ISR CASE
+
+                allocate(pmu2(arraylen,0:3), stat=err) !!! Maybe move these allocations to a subroutine
+                if (err /= 0) then
+                    print *, "pmu1 array allocation request denied, aborting!"
+                    print*, ""
+                    stop
+                endif
+
+                allocate(pmod2(arraylen), stat=err)
+                if (err /= 0) then
+                    print *, "pmod1 array allocation request denied, aborting!"
+                    print*, ""
+                    stop
+                endif
+                allocate(costhmu2(arraylen), stat=err)
+                if (err /= 0) then
+                    print *, "costhmu1 array allocation request denied, aborting!"
+                    print*, ""
+                    stop
+                endif
+                allocate(pgam(arraylen,0:3), stat=err)
+                if (err /= 0) then
+                    print *, "pgam array allocation request denied, aborting!"
+                    print*, ""
+                    stop
+                endif
+                allocate(costhgam(arraylen), stat=err)
+                if (err /= 0) then
+                    print *, "costhgam array allocation request denied, aborting!"
+                    print*, ""
+                    stop
+                endif
+                allocate(qq(arraylen), stat=err)
+                if (err /= 0) then
+                    print *, "qq array allocation request denied, aborting!"
+                    print*, ""
+                    stop
+                endif
+
+                if (wghtopt .eqv. .false.) then
+                
+                    allocate(accpt(arraylen), stat=err)
+                    if (err /= 0) then
+                        print *, "accpt array allocation request denied, aborting!"
+                        print*, ""
+                        stop
+                    endif
+                else
+                    allocate(wght(arraylen), stat=err)
+                    if (err /= 0) then
+                        print *, "wght array allocation request denied, aborting!"
+                        print*, ""
+                        stop
+                    endif
+                endif
+                
+            endif
+
+
+            
+        end subroutine allocarrays
 
         subroutine genborn()
 
@@ -652,7 +766,6 @@ module eventgen
 
                 inte = gev2nbarn*jacqq*jacgam*jacmuang/(4.*pi*sinv)*invampl
 
-
                 if (run == 1) then
                     if(inte > tmpintemax) tmpintemax = inte
                     if(inte < tmpintemin) tmpintemin = inte
@@ -661,11 +774,10 @@ module eventgen
                 if (run == 2) then
                     
                     if (inte > intemax) print*, "Warning: Found integrand greater than estimated maximum!"
-                    z = rndm(7)
-                    !print*, "z = ",z," inte fraction = ", inte/intemax
 
                     if (wghtopt .eqv. .false.) then
 
+                        z = rndm(7)
                         if ( z <= inte/intemax ) then
                             accpt(iev) = 1
                             naccpt = naccpt + 1.
@@ -687,7 +799,7 @@ module eventgen
                         end if
                     endif
                     if (wghtopt .eqv. .true.) then ! WEIGHTED GENERATION
-                        wght(iev) = z
+                        wght(iev) = inte/intemax
                         naccpt = naccpt + wght(iev) 
 
                         if (histsave /= '') then
@@ -922,10 +1034,11 @@ module output
 
     contains
         subroutine writevents
-            if (evsave /= '') then !!! Redundant?
+            if (evsave /= '') then !!! Put it in the main program
                 open(newunit=ou, file=evsave, iostat=ios)
                 if (ios == 0) then
                     print*, "Saving events to output file ", evsave
+                    print*, ""
                     if ( isr .eqv. .false. ) then
                         write(ou, *) 'Output file of Born generation...' !!! More details on the generation
                         write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
@@ -1000,15 +1113,16 @@ module output
                 open(newunit=hu, file=histsave, iostat=ios)
                 if (ios == 0) then
                     print*, "Saving histograms to output file ", histsave
+                    print*, ""
                     if ( isr .eqv. .false. ) then
-                        call endhistsborn()
+                        call endbornhistos()
                         write(hu, *) 'Histogram file of Born generation...' !!! More details on the generation
                         call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
                         call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
                         call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
                     end if
                     if ( isr .eqv. .true. ) then
-                        call endhistsisr()
+                        call endisrhistos()
                         write(hu, *) 'Histogram file of ISR generation...' !!! More details on the generation
                         call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
                         call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
@@ -1042,44 +1156,17 @@ program toygenerator
     use eventgen
     use output
     implicit none
-    integer(i10) :: err, arraylen
     real(r14) :: eff, sigma, dsigma, bornsigma
 
     call loadinput()
 
     call random_seed(put=seed)
 
-    arraylen = max(ngen,nmax)
-
-    allocate(pmu1(arraylen,0:3), stat=err) !!! Maybe only allocate the big event arrays if evsave is called
-    if (err /= 0) then
-        print *, "pmu1 array allocation request denied, aborting!"
-        print*, ""
-        stop
-    endif
-    allocate(pmod1(arraylen), stat=err)
-    if (err /= 0) then
-        print *, "pmod1 array allocation request denied, aborting!"
-        print*, ""
-        stop
-    endif
-    allocate(costhmu1(arraylen), stat=err)
-    if (err /= 0) then
-        print *, "costhmu1 array allocation request denied, aborting!"
-        print*, ""
-        stop
-    endif
+    call allocarrays()
 
     if (isr .eqv. .false.) then ! BORN CASE
 
-        if (histsave /= '') call inithistsborn()
-
-        allocate(accpt(arraylen), stat=err)
-        if (err /= 0) then
-            print *, "accpt array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif        
+        if (histsave /= '') call inithistsborn()    
 
         do iev = 1, ngen !!! THINK ABOUT PARALLELISATION
 
@@ -1091,7 +1178,9 @@ program toygenerator
         call writevents()
         call writehists()
 
-        eff = naccpt/ngen
+        bornsigma = gev2nbarn*4.*pi/3.*alpha**2/sinv
+        print*, "bornsigma ", bornsigma
+        eff = dble(naccpt)/ngen
         sigma = bornsigma * eff
         dsigma = bornsigma/ngen * sqrt(ngen * eff * (1-eff))
         print *, ""
@@ -1102,61 +1191,6 @@ program toygenerator
         print *, "--------------------------------------------"
 
     else ! ISR CASE
-
-        allocate(pmu2(arraylen,0:3), stat=err) !!! Maybe move these allocations to a subroutine
-        if (err /= 0) then
-            print *, "pmu1 array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif
-
-        allocate(pmod2(arraylen), stat=err)
-        if (err /= 0) then
-            print *, "pmod1 array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif
-        allocate(costhmu2(arraylen), stat=err)
-        if (err /= 0) then
-            print *, "costhmu1 array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif
-        allocate(pgam(arraylen,0:3), stat=err)
-        if (err /= 0) then
-            print *, "pgam array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif
-        allocate(costhgam(arraylen), stat=err)
-        if (err /= 0) then
-            print *, "costhgam array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif
-        allocate(qq(arraylen), stat=err)
-        if (err /= 0) then
-            print *, "qq array allocation request denied, aborting!"
-            print*, ""
-            stop
-        endif
-
-        if (wghtopt .eqv. .false.) then
-        
-            allocate(accpt(arraylen), stat=err)
-            if (err /= 0) then
-                print *, "accpt array allocation request denied, aborting!"
-                print*, ""
-                stop
-            endif
-        else
-            allocate(wght(arraylen), stat=err)
-            if (err /= 0) then
-                print *, "wght array allocation request denied, aborting!"
-                print*, ""
-                stop
-            endif
-        endif
         
         if (histsave /= '') call inithistsisr()
         run = 1
@@ -1185,6 +1219,13 @@ program toygenerator
         eff = naccpt/ngen
         sigma = intemax * eff
         dsigma = intemax/ngen * sqrt(ngen * eff * (1-eff))
+        if ( wghtopt .eqv. .true. ) then
+            dsigma = 0
+            do iev = 1, ngen
+                dsigma = dsigma + intemax**2/(ngen*(ngen-1))*(wght(iev)-naccpt/ngen)**2
+            end do
+            dsigma = sqrt(dsigma)
+        end if
         print *, ""
         print *, "--------------------------------------------"
         print '(A, f6.2, A, f6.2, A)', "Total cross section = ", sigma, " +-", dsigma, " nb"
