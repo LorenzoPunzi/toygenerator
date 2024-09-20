@@ -1,3 +1,20 @@
+module wrap_omp
+    contains
+        integer function get_nthreads()
+    
+                integer, external :: omp_get_num_threads
+                get_nthreads = omp_get_num_threads()
+
+                get_nthreads = 1
+        end function get_nthreads
+
+        integer function get_nprocs()
+                integer, external :: omp_get_num_procs
+                get_nprocs = omp_get_num_procs()
+                get_nprocs = 1
+        end function get_nprocs
+end module wrap_omp
+
 module numeric
 
     implicit none
@@ -564,7 +581,7 @@ module histogram
             real(r14), intent(in) :: histmin, histmax
             integer :: bb
 
-            do bb = 0, nbins+1
+            do bb = 0, nbins+1 !!!! what to do in born case to obtain sigma
                 hist(bb,2) = sqrt(ngen*(hist(bb,1)/ngen-(hist(bb,1)/ngen)**2))
             enddo
 
@@ -1149,7 +1166,9 @@ end module output
 
 
 program toygenerator
-
+#ifdef _OPENMP
+    use wrap_omp
+#endif
     use numeric
     use inputs
     use histogram
@@ -1157,6 +1176,9 @@ program toygenerator
     use output
     implicit none
     real(r14) :: eff, sigma, dsigma, bornsigma
+        
+    print '("Number of available processors: ",i0)', get_nprocs()
+    print '("Number of threads: ",i0)', get_nthreads()
 
     call loadinput()
 
@@ -1168,12 +1190,17 @@ program toygenerator
 
         if (histsave /= '') call inithistsborn()    
 
+        !do concurrent (iev = 1: ngen)
+
+        !$omp parallel do
         do iev = 1, ngen !!! THINK ABOUT PARALLELISATION
 
             call random_number(rndm)
             call genborn()
 
         end do
+        !$omp end parallel do
+        
 
         call writevents()
         call writehists()
@@ -1196,7 +1223,7 @@ program toygenerator
         run = 1
 
         do iev = 1, nmax !!! Think about parallelisation
-
+        !do concurrent (iev : 1, nmax)
              call random_number(rndm)
              call genisr()
             
