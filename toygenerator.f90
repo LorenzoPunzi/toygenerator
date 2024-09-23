@@ -1,20 +1,3 @@
-module wrap_omp
-    contains
-        integer function get_nthreads()
-    
-                integer, external :: omp_get_num_threads
-                get_nthreads = omp_get_num_threads()
-
-                get_nthreads = 1
-        end function get_nthreads
-
-        integer function get_nprocs()
-                integer, external :: omp_get_num_procs
-                get_nprocs = omp_get_num_procs()
-                get_nprocs = 1
-        end function get_nprocs
-end module wrap_omp
-
 module numeric
 
     implicit none
@@ -38,6 +21,19 @@ module numeric
     
         end function cubicroot
 
+        function compareals(x,y)
+            real(r14), intent(in) :: x, y
+            logical :: compareals
+
+            if ( abs(x-y) < epsilon(x) ) then
+                compareals = .true.
+            else 
+                compareals = .false.
+            end if
+
+        end function compareals
+
+
 
 
 end module numeric    
@@ -60,19 +56,52 @@ module inputs
         subroutine loadinput() 
             nargs = command_argument_count()
             if (nargs == 0 .or. nargs >= 2) then
-                print *, "Wrong input! Usage:"
-                print *, "$toygenerator path/to/inputcard.dat"
-                print *, "$toygenerator search path/to/searchdirectory"
+                print*, ""
+                print *, "Wrong input!"
+                print*, ""
+                print*, "MC generation usage:"
+                print*, ""
+                print *, "$toygenerator path/to/inputcard"
+                print*, ""
+                print*, "For help enter"
+                print*, ""
+                print *, "$toygenerator --help"
+                print*, "or"
+                print *, "$toygenerator -h"
+                print*, ""
                 stop
             end if
 
+            print*, ""
+            print*, "***********************************************************************************"
+            print*, "***********************************************************************************"
+            print*, ""
+            print*, ""
+            print*, "       WELCOME TO THE e+ e- ==> mu+ mu- (gamma) TOY MONTE CARLO GENERATOR!"
+            print*, ""
+            print*, ""
+            print*, "***********************************************************************************"
+            print*, "***********************************************************************************"
+            print*, ""
+            print*, ""
+
             call get_command_argument(1,cardname)
+
+            if ( cardname == '--help' .or. cardname == '-h') then
+                print*, "************************************"
+                print*, "You have entered HELP MODE"
+                print*, "The Monte Carlo generator requires a configuration input card to be"
+                print*, "given as input (e.g. '$toygenerator path/to/inputcard'). The input card"
+                print*, "should be a column file "
+
+
+                print*, "************************************"
+                print*, ""
+            end if
 
             inquire(file=cardname, exist=exists)
             if(exists) then
-                print*, ""
-                print *, "Reading '" , trim(cardname), "' as input card"
-                print*, ""
+                print *, "Reading '" , trim(cardname), "' as input card..."
             else
                 print *, "File '", trim(cardname), "' does not exist, aborting!"
                 print*, ""
@@ -261,7 +290,7 @@ module inputs
                         endif
                         if (gmin < 0) then
                             print*, "Input error! Minimum energy of isr photon"&
-                            " 'gmin' (",gmin, ") MUST be positive [GeV^2]! Aborting..."
+                            " 'gmin' (",gmin, ") MUST be positive [GeV]! Aborting..."
                             print *, ""
                             stop
                         endif
@@ -327,6 +356,65 @@ module inputs
             endif
 
         close(unit=iu)
+
+        print*, ""
+        print*, "Loading of input card completed!"
+        print*, ""
+        print*, "============================================"
+        print*, ""
+        print '(A, i0)', "    Seed : ", seed(1)
+        print*, ""
+        if ( isr .eqv. .false. ) then
+            print '(A)', "   Generation mode : BORN"
+            print*, ""
+        else
+            print '(A)', "    Generation mode : ISR"
+            print*, ""
+            if (wghtopt .eqv. .true. ) then
+                print '(A)', "    Weighted generation : ON"
+                print*, ""
+            else 
+                print '(A)', "    Weighted generation : OFF"
+                print*, ""
+            end if
+        end if
+        print '(A, i0)', "    Number of events to generate : ", ngen
+        print*, ""
+        if ( isr .eqv. .true. ) then
+            print '(A, i0)', "    Number of events&
+            & to find maximum of integrand : ", nmax
+            print*, ""
+        endif 
+        print '(A, f0.2, A)', "    Center of mass energy = ", cme, " GeV"
+        print*, "" 
+        if ( compareals(thmucutmin,0.0_r14) .and. compareals(thmucutmax,180.0_r14) ) then
+            print '(A)', "    No angular cuts on muons"
+        else 
+            print '(A, f0.2, A, f0.2)', "    Angular cuts on muons : theta min = ", thmucutmin, " theta max =  ", thmucutmax
+        end if 
+        print*, ""
+        if ( isr .eqv. .true. ) then
+            if ( compareals(thgamcutmin,0.0_r14) .and. compareals(thgamcutmax,180.0_r14) ) then
+                print '(A)',  "    No angular cuts on ISR photon"
+            else 
+                print '(A, f0.2, A, f0.2)', "    Angular cuts on ISR photon :&
+                & theta min = ", thgamcutmin, " theta max =  ", thgamcutmax
+            end if 
+        endif
+        print*, ""
+        if ( compareals(qqcutmin,0.0_r14) .and. compareals(qqcutmax,sinv) ) then
+            print '(A)', "    No cuts on muon system invariant mass"
+        else 
+            print '(A, f0.2, A, f0.2)', "    Angular cuts on muons' invariant mass: qq min = ", qqcutmin, " qq max =  ", qqcutmax
+        end if
+        print*, ""
+        if ( isr .eqv. .true. ) then
+            print '(A, f0.2, A)', "    Minimum ISR photon energy = ", gmin, " GeV"
+        endif 
+        print*, ""
+        print*, "============================================"
+        print*, ""
+        
             
             
         end subroutine loadinput
@@ -568,9 +656,10 @@ module histogram
             integer :: bb
 
             do bb = 0, nbins+1
-                !hist(bb,2) = sqrt(hist(bb,2))
-                hist(bb,2) = intemax * sqrt((hist(bb,1)/ngen-(hist(bb,1)/ngen)**2)/ngen)
+                hist(bb,2) = sqrt(hist(bb,2))
+                !hist(bb,2) = intemax * sqrt((hist(bb,1)/ngen-(hist(bb,1)/ngen)**2)/ngen)
                 hist(bb,1) = intemax/ngen*hist(bb,1)
+                hist(bb,2) = intemax/ngen*hist(bb,2)
                 hist(bb,1)=hist(bb,1)*dble(nbins)/(histmax-histmin)
                 hist(bb,2)=hist(bb,2)*dble(nbins)/(histmax-histmin)
             enddo
@@ -582,7 +671,10 @@ module histogram
             integer :: bb
 
             do bb = 0, nbins+1 !!!! what to do in born case to obtain sigma
-                hist(bb,2) = sqrt(ngen*(hist(bb,1)/ngen-(hist(bb,1)/ngen)**2))
+                hist(bb,2) = sqrt(hist(bb,2))
+                !hist(bb,2) = sqrt(ngen*(hist(bb,1)/ngen-(hist(bb,1)/ngen)**2))
+                hist(bb,1)=hist(bb,1)*dble(nbins)/(histmax-histmin)
+                hist(bb,2)=hist(bb,2)*dble(nbins)/(histmax-histmin)
             enddo
 
         end subroutine endhistborn
@@ -621,13 +713,14 @@ module eventgen
     implicit none
     real(r14) :: inte, tmpintemin = 0., tmpintemax = 0., sinthmu, phimu, cosphimu, &
     sinphimu, sinthgam, Muontensor(0:3,0:3), Electrontensor(0:3,0:3), invampl, naccpt = 0.
-    real(r14) :: rndm(7), jacqq, jacgam, jacmuang, pgamvirt(0:3), z, ppos(0:3), pel(0:3)
+    real(r14) :: rndm(7), jacqq, jacgam, jacmuang, pgamvirt(0:3), z, ppos(0:3), pel(0:3), &
+    eff, sigma, dsigma, bornsigma
     real(r14), allocatable :: pmu1(:,:), pmu2(:,:), pmod1(:), pmod2(:), pgam(:,:), costhmu1(:), &
-    costhmu2(:), costhgam(:), qq(:), wght(:) ! Reduce to fewer higher dimensional arrays 
+    costhmu2(:), costhgam(:), qq(:), wght(:)  ! Reduce to fewer higher dimensional arrays 
     integer(i10) :: iev, arraylen
     integer(i10), allocatable :: accpt(:)
     integer :: run, err
-    logical :: accepted
+    logical :: accepted, warnflag = .false.
 
 
 
@@ -790,8 +883,12 @@ module eventgen
 
                 if (run == 2) then
                     
-                    if (inte > intemax) print*, "Warning: Found integrand greater than estimated maximum!"
-
+                    if (inte > intemax .and. (warnflag .eqv. .false.)) then
+                        print*, "WARNING : Found integrand greater than estimated maximum!&
+                        & Try increasing 'nmax'..."
+                        print*, ""
+                        warnflag = .true.
+                    endif
                     if (wghtopt .eqv. .false.) then
 
                         z = rndm(7)
@@ -1052,10 +1149,16 @@ module output
     contains
         subroutine writevents
             if (evsave /= '') then !!! Put it in the main program
+                inquire(file=evsave, exist=exists)
+                if(exists) then
+                    print *, "Writing events to file ", trim(evsave), " (overwriting)..."
+                    print*, ""
+                else
+                    print *, "Writing events to file", trim(evsave)
+                    print*, ""
+                end if
                 open(newunit=ou, file=evsave, iostat=ios)
                 if (ios == 0) then
-                    print*, "Saving events to output file ", evsave
-                    print*, ""
                     if ( isr .eqv. .false. ) then
                         write(ou, *) 'Output file of Born generation...' !!! More details on the generation
                         write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
@@ -1098,7 +1201,7 @@ module output
                     end if
                     close(unit=ou)
                 else
-                    print *, 'ERROR while opening file ', evsave
+                    print *, 'ERROR while opening file ', trim(evsave)
                 end if
             else    
                 return
@@ -1127,10 +1230,18 @@ module output
 
         subroutine writehists
             if (histsave /= '') then !!! Redundant?
-                open(newunit=hu, file=histsave, iostat=ios)
-                if (ios == 0) then
-                    print*, "Saving histograms to output file ", histsave
+
+                inquire(file=histsave, exist=exists)
+                if(exists) then
+                    print *, "Writing histograms to file ", trim(histsave), " (overwriting)..."
                     print*, ""
+                else
+                    print *, "Writing histograms to file", trim(histsave)
+                    print*, ""
+                end if
+
+                open(newunit=hu, file=histsave, iostat=ios)    
+                if (ios == 0) then
                     if ( isr .eqv. .false. ) then
                         call endbornhistos()
                         write(hu, *) 'Histogram file of Born generation...' !!! More details on the generation
@@ -1162,23 +1273,127 @@ module output
             
         end subroutine writehists
 
+        subroutine finalout
+
+            inquire(file="info.out", exist=exists)
+            if(exists) then
+                print *, "Writing this generation output to file 'info.out' (overwriting)..."
+                print*, ""
+            else
+                print *, "Writing this generation output to file 'info.out'..."
+                print*, ""
+            end if
+            open(newunit=ou, file="info.out", iostat=ios)
+            if (ios == 0) then
+                if ( isr .eqv. .false. ) then ! BORN CASE
+                    write(ou,*) "==========================================&
+                    &======================================"
+                    write(ou,*) "                              TOYGENERATOR OUTPUT&
+                    &                                       "
+                    write(ou,*) "==========================================&
+                    &======================================"
+                    write(ou,*) ""
+                    write(ou,'(A, i0)') "* Born generation (LO) using seed = ", seed(1)
+                    write(ou,*) ""
+                    write(ou,'(A, f0.2)') "* Center of mass energy = ", cme, " GeV"
+                    write(ou,*) ""
+                    if ( compareals(thmucutmin,0.0_r14) .and. compareals(thmucutmax,180.0_r14) ) then
+                        write(ou,'(A)') "* No angular cuts on muons"
+                    else 
+                        write(ou,'(A, f0.2, A, f0.2)') "* Angular cuts on muons :&
+                        & theta min = ", thmucutmin, " theta max =  ", thmucutmax
+                    end if 
+                    write(ou,*) ""
+                    if ( compareals(qqcutmin,0.0_r14) .and. compareals(qqcutmax,sinv) ) then
+                        write(ou,'(A)') "* No cuts on muon system invariant mass"
+                    else 
+                        write(ou,'(A, f0.2, A, f0.2)') "* Angular cuts on muons' &
+                        &invariant mass: qq min = ", qqcutmin, " qq max =  ", qqcutmax
+                    end if
+                    write(ou,*) "" 
+                    write(ou,'(A, i0, A, i0, A, f5.3)') "* ", int(naccpt), " events accepted of ", ngen, " events generated&
+                    & ====> Generation efficiency = ", eff 
+                    write(ou,*) ""
+                    write(ou,'(A, f0.2, A)') "* Total Born cross section without cuts = &
+                    &", bornsigma, " nb"
+                    write(ou,*) ""
+                    write(ou,'(A, f0.2, A, f0.2, A)') "* Total Born cross section with&
+                    & selected cuts= ", sigma, " +- ", dsigma, " nb"
+                    write(ou,*) ""
+                    write(ou,*) "==========================================&
+                    &======================================"
+                end if
+                if ( isr .eqv. .true. ) then
+                    write(ou,*) "==========================================&
+                    &======================================"
+                    write(ou,*) "                              TOYGENERATOR OUTPUT&
+                    &                                       "
+                    write(ou,*) "==========================================&
+                    &======================================"
+                    write(ou,*) ""
+                    write(ou,'(A, i0)') "* ISR generation (NLO) using seed = ", seed(1)
+                    write(ou,*) ""
+                    if ( wghtopt .eqv. .false. ) then
+                        write(ou,'(A)') "* Weighted generation : OFF " 
+                        write(ou,*) ""
+                    end if
+                    if ( wghtopt .eqv. .true. ) then
+                        write(ou,'(A)') "* Weighted generation : ON " 
+                        write(ou,*) ""
+                    end if
+                    write(ou,'(A, f0.2, A)') "* Center of mass energy = ", cme, " GeV"
+                    write(ou,*) ""
+                    if ( compareals(thmucutmin,0.0_r14) .and. compareals(thmucutmax,180.0_r14) ) then
+                        write(ou,'(A)') "* No angular cuts on muons"
+                    else 
+                        write(ou,'(A, f0.2, A, f0.2)') "* Angular cuts on muons :&
+                        & theta min = ", thmucutmin, " theta max =  ", thmucutmax
+                    end if 
+                    write(ou,*) ""
+                    if ( compareals(thgamcutmin,0.0_r14) .and. compareals(thgamcutmax,180.0_r14) ) then
+                        write(ou,'(A)') "* No angular cuts on ISR photon"
+                    else 
+                        write(ou,'(A, f0.2, A, f0.2)') "* Angular cuts on ISR photon :&
+                        & theta min = ", thgamcutmin, " theta max =  ", thgamcutmax
+                    end if 
+                    write(ou,*) ""
+                    if ( compareals(qqcutmin,0.0_r14) .and. compareals(qqcutmax,sinv) ) then
+                        write(ou,'(A)') "* No cuts on muon system invariant mass"
+                    else 
+                        write(ou,'(A, f0.2, A, f0.2)') "* Angular cuts on muons' &
+                        &invariant mass: qq min = ", qqcutmin, " qq max =  ", qqcutmax
+                    end if
+                    write(ou,*) ""
+                    write(ou,'(A, f0.2, A)') "* Minimum ISR photon energy = ", gmin, " GeV"
+                    write(ou,*) "" 
+                    write(ou,'(A, i0, A, i0, A, f5.3)') "* ", int(naccpt), " events accepted of ", ngen, " events generated&
+                    & ====> Generation efficiency = ", eff 
+                    write(ou,*) ""
+                    write(ou,'(A, f0.2, A, f0.2, A)') "* Total ISR cross section with selected cuts= ", sigma, " +- ", dsigma, " nb"
+                    write(ou,*) ""
+                    write(ou,*) "==========================================&
+                    &======================================"
+                    
+                end if
+                close(unit=ou)
+            else
+                print *, 'ERROR while opening file ', evsave
+            end if
+
+            print*, "Finished writing output!"
+            
+        end subroutine finalout
+
 end module output
 
 
 program toygenerator
-#ifdef _OPENMP
-    use wrap_omp
-#endif
     use numeric
     use inputs
     use histogram
     use eventgen
     use output
     implicit none
-    real(r14) :: eff, sigma, dsigma, bornsigma
-        
-    print '("Number of available processors: ",i0)', get_nprocs()
-    print '("Number of threads: ",i0)', get_nthreads()
 
     call loadinput()
 
@@ -1190,32 +1405,24 @@ program toygenerator
 
         if (histsave /= '') call inithistsborn()    
 
-        !do concurrent (iev = 1: ngen)
-
-        !$omp parallel do
         do iev = 1, ngen !!! THINK ABOUT PARALLELISATION
 
             call random_number(rndm)
             call genborn()
 
         end do
-        !$omp end parallel do
         
 
         call writevents()
         call writehists()
 
         bornsigma = gev2nbarn*4.*pi/3.*alpha**2/sinv
-        print*, "bornsigma ", bornsigma
         eff = dble(naccpt)/ngen
         sigma = bornsigma * eff
         dsigma = bornsigma/ngen * sqrt(ngen * eff * (1-eff))
         print *, ""
-        print *, "--------------------------------------------"
-        print '(A, f6.2, A, f6.2, A)', "Total Born cross section = ", sigma, " +-", dsigma, " nb"
-        print *, ""
-        print '(A, f5.3)', "Generation efficiency = ", eff
-        print *, "--------------------------------------------"
+        
+
 
     else ! ISR CASE
         
@@ -1245,22 +1452,23 @@ program toygenerator
 
         eff = naccpt/ngen
         sigma = intemax * eff
-        dsigma = intemax/ngen * sqrt(ngen * eff * (1-eff))
         if ( wghtopt .eqv. .true. ) then
             dsigma = 0
             do iev = 1, ngen
                 dsigma = dsigma + intemax**2/(ngen*(ngen-1))*(wght(iev)-naccpt/ngen)**2
             end do
             dsigma = sqrt(dsigma)
+        else 
+            dsigma = intemax/ngen * sqrt(ngen * eff * (1-eff))
         end if
-        print *, ""
-        print *, "--------------------------------------------"
-        print '(A, f6.2, A, f6.2, A)', "Total cross section = ", sigma, " +-", dsigma, " nb"
-        print *, ""
-        print '(A, f5.3)', "Generation efficiency = ", eff
-        print *, "--------------------------------------------"
-
 
     endif
+
+    call finalout()
+
+    print*, ""
+    print*, "***********************************************************************************"
+    print*, "***********************************************************************************"
+    print*, ""
 
 end program toygenerator
