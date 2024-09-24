@@ -1,23 +1,23 @@
 module numeric
 
     implicit none
-    integer, parameter :: r14 = selected_real_kind(14,99) !!! should I use 1.0_r14 or 1.?
+    integer, parameter :: r14 = selected_real_kind(14,99) 
     integer, parameter :: i10 = selected_int_kind(10)
-    real(r14), parameter :: pi = 4.0 * atan(1.0)  ! pi = 4 * arctan(1) gives the value of pi
-    real(r14), parameter :: alpha = 1./(137.035999174)  ! alpha QED
-    real(r14), parameter :: mmu = 0.10565837  ! muon mass [GeV]
-    real(r14), parameter :: me = 0.000510998950  ! electron mass [GeV]
-    real(r14), parameter :: gev2nbarn = 389379.292  ! Conversion from GeV^2 to nbarn
-    real(r14), parameter :: degtorad = pi/180.  ! Conversion from degrees to radians
-    real(r14), parameter :: radtodeg = 180./pi  ! Conversion from radians to degrees
-    real(r14), parameter :: qqmin = 4.*mmu*mmu ! Minimum invariant mass squared of the mu-mu system
+    real(r14), parameter :: pi = 4.0_r14 * atan(1.0_r14)  ! pi = 4 * arctan(1) gives the value of pi
+    real(r14), parameter :: alpha = 1.0_r14/(137.0359991740_r14)  ! alpha QED
+    real(r14), parameter :: mmu = 0.105658370_r14  ! muon mass [GeV]
+    real(r14), parameter :: me = 0.000510998950_r14 ! electron mass [GeV]
+    real(r14), parameter :: gev2nbarn = 389379.2920_r14  ! Conversion from GeV^2 to nbarn
+    real(r14), parameter :: degtorad = pi/180.0_r14  ! Conversion from degrees to radians
+    real(r14), parameter :: radtodeg = 180.0_r14/pi  ! Conversion from radians to degrees
+    real(r14), parameter :: qqmin = 4.0_r14*mmu*mmu ! Minimum invariant mass squared of the mu-mu system
 
     contains
         function cubicroot(x) 
             real(r14), intent(in) :: x
             real(r14) :: cubicroot
             
-            cubicroot = sign(1.0_r14, x)* (abs(x))**(1./3.)
+            cubicroot = sign(1.0_r14, x)* (abs(x))**(1.0_r14/3.)
     
         end function cubicroot
 
@@ -44,13 +44,14 @@ module inputs
 
     use numeric
     implicit none
-    character(len = 100) :: cardname, readline, opt, optval, evsave = '', histsave = ''  !!! extend it to be flexible
-    integer :: nargs, iu, ios, seed(8), nbins = -999 !!! Add messages for when the necessary arguments are not initialised (-999)
-    integer(i10) :: ngen = -999, nmax = -999
-    logical :: exists, wghtopt = .false., isr = .false.
-    real(r14) :: cme = -999, thmucutmin = 0, thmucutmax = 180, qqcutmin = 0, qqcutmax = -999, &
-    sinv, gmin = 0.01, qqmax, thgamcutmin = 0, thgamcutmax = 180, costhgammin, &
-    costhgammax, costhmumin, costhmumax, intemax = 1.
+    character(len = 100) :: cardname, readline, opt, optval, evsave = '', histsave = ''
+    integer :: nargs, iu, ios, seed(8), nbins
+    integer(i10) :: ngen, nmax
+    logical :: exists, wghtopt = .false., isr = .false., cmeflg = .false., ngenflg = .false., &
+    nmaxflg = .false., isrflg = .false., gminflg = .false., seedflg = .false., nbinflg = .false., qqcutmaxflg = .false.
+    real(r14) :: cme, thmucutmin = 0.0_r14, thmucutmax = 180.0_r14, qqcutmin = 0.0_r14, qqcutmax, &
+    sinv, gmin, qqmax, thgamcutmin = 0.0_r14, thgamcutmax = 180.0_r14, costhgammin, &
+    costhgammax, costhmumin, costhmumax, intemax = 1.0_r14, bornsigma
 
     contains
         subroutine loadinput() 
@@ -61,13 +62,16 @@ module inputs
                 print*, ""
                 print*, "MC generation usage:"
                 print*, ""
-                print *, "$toygenerator path/to/inputcard"
+                print*, "$make"
+                print *, "$./toygenerator path/to/inputcard"
                 print*, ""
-                print*, "For help enter"
+                print*, "For help mode use"
                 print*, ""
-                print *, "$toygenerator --help"
+                print*, "$make"
+                print *, "$./toygenerator --help"
                 print*, "or"
-                print *, "$toygenerator -h"
+                print*, "$make"
+                print *, "$./toygenerator -h"
                 print*, ""
                 stop
             end if
@@ -88,20 +92,61 @@ module inputs
             call get_command_argument(1,cardname)
 
             if ( cardname == '--help' .or. cardname == '-h') then
-                print*, "************************************"
-                print*, "You have entered HELP MODE"
-                print*, "The Monte Carlo generator requires a configuration input card to be"
-                print*, "given as input (e.g. '$toygenerator path/to/inputcard'). The input card"
-                print*, "should be a column file "
-
-
-                print*, "************************************"
+                print*, "============================================================================================"
                 print*, ""
+                print*, "                              TOYGENERATOR HELP MODE"
+                print*, ""
+                print*, "The Monte Carlo generator simulates e+ e- ==> mu+ mu- (gamma) interactions"
+                print*, "where an ISR gamma can be present in the final state. It generates the relevant"
+                print*, "kinematical quantities event by event, and calculates the total cross section"
+                print*, "with the selected cuts. The cross section, the seed used and other important"
+                print*, "information are stored in a file named 'info.out' in the same directory the "
+                print*, "program is run in. The generation can be performed in a 'weighted' manner, "
+                print*, "where all events are accepted but stored witha  weight < 1 and equal to their"
+                print*, "acceptance probability."
+                print*, ""
+                print*, "The Monte Carlo generator requires a configuration input card to be"
+                print*, "given as input (e.g. '$./toygenerator path/to/inputcard'). The input card"
+                print*, "should be a column file with no header. Each variable is separated by an"
+                print*, "arbitrary number of spaces from its variable. Nothing is read after the"
+                print*, "first empty line. Before running the generator, compile with '$make'."
+                print*, ""
+                print*, "Required input:"
+                print*, ""
+                print*, "* seed : generation seed used (positive integer)"
+                print*, "* ngen : number of events the program should attempt to generate (positive integer)"
+                print*, "* nmax : number of events to find the integrand maximum (ISR only, positive integer)"
+                print*, "* isr : generation mode, whether BORN ('n','no') or ISR ('y','yes')"
+                print*, "* cme : center of mass energy of the initial state (positive real)[GeV]"
+                print*, "* gmin : minimum energy of ISR photon (positive real)[GeV]"
+                print*, "* nbins : number of histogram bins (positive integer), mandatory if 'histsave' is given"
+                print*, ""
+                print*, "Optional input:"
+                print*, ""
+                print*, "* evsave : path to file where events should be written"
+                print*, "* histsave : path to file where histograms should be written"
+                print*, "* weight : generation mode, whether weighted ('y','yes') or not ('n','no'). When enabled, "
+                print*, "           ALL events are stored, with a weight equal to their acceptance probability."
+                print*, "           This mode is only available in ISR mode. By default the generation is not weighted."
+                print*, "-------------------------------------------CUTS--------------------------------------------------"
+                print*, "* qqcutmin : minimum invariant mass of the muon system (positive real)[GeV^2]"
+                print*, "* qqcutmax : maximum invariant mass of the muon system (positive real)[GeV^2]"
+                print*, "* thmucutmin : minimum polar angle of muons in the center of mass system (positive real)[degrees]"
+                print*, "* thmucutmax : maximum polar angle of muons in the center of mass system (positive real)[degrees]"
+                print*, "* thgamcutmin : minimum polar angle of ISR photon in the center of mass system"
+                print*, "                (positive real)[degrees]. This cut is only available in ISR mode."
+                print*, "* thgamcutmax : maximum polar angle of ISR photon in the center of mass system"
+                print*, "                (positive real)[degrees]. This cut is only available in ISR mode."
+                print*, ""
+                print*, "============================================================================================"
+                print*, ""
+                stop
             end if
 
             inquire(file=cardname, exist=exists)
             if(exists) then
                 print *, "Reading '" , trim(cardname), "' as input card..."
+                print*, ""
             else
                 print *, "File '", trim(cardname), "' does not exist, aborting!"
                 print*, ""
@@ -119,15 +164,15 @@ module inputs
                     if (readline ==' ') exit
                     read(readline, *) opt, optval
 
-                    !!! Might not be optimal, for each line we check if it's cme, seed, etc
                     if (opt == 'cme') then
+                        cmeflg = .true.
                         read(optval, *, iostat=ios) cme
                         if (ios /= 0) then
                             print *, "Input error! Value given for 'cme' is not valid! Aborting..."
                             print *, ""
                             stop
                         endif
-                        if (cme<=0) then
+                        if (cme<= 0.0_r14) then
                             print*, "Input error! Center of mass energy 'cme' MUST be positive real number [GeV]! Aborting..."
                             print *, ""
                             stop
@@ -146,6 +191,7 @@ module inputs
                         endif
 
                     else if (opt == 'seed') then
+                        seedflg = .true.
                         read(optval, *, iostat=ios) seed(1)
                         if (ios /= 0) then
                             print *, "Input error! Value given for 'seed' is not valid! Aborting..."
@@ -159,19 +205,21 @@ module inputs
                         endif
 
                     else if (opt == 'nbins') then
+                        nbinflg = .true.
                         read(optval, *, iostat=ios) nbins
                         if (ios /= 0) then
                             print *, "Input error! Value given for 'nbins' is not valid! Aborting..."
                             print *, ""
                             stop
                         endif
-                        if (seed(1)<=0) then
+                        if (nbins<=0) then
                             print*, "Input error! Number of histogram bins 'nbins' MUST be at least 1! Aborting..."
                             print *, ""
                             stop
                         endif
 
                     else if (opt == 'ngen') then
+                        ngenflg = .true.
                         read(optval, *, iostat=ios) ngen
                         if (ios /= 0) then
                             print *, "Input error! Value given for 'ngen' is not valid! Aborting..."
@@ -185,6 +233,7 @@ module inputs
                         endif
 
                     else if (opt == 'nmax') then
+                        nmaxflg = .true.
                         read(optval, *, iostat=ios) nmax
                         if (ios /= 0) then
                             print *, "Input error! Value given for 'nmax' is not valid! Aborting..."
@@ -198,6 +247,7 @@ module inputs
                         endif
 
                     else if (opt == 'isr') then
+                        isrflg = .true.
                         if (trim(optval) == 'yes' .or. trim(optval) == 'y') then
                             isr = .true.
                         else if (trim(optval) == 'no' .or. trim(optval) == 'n') then
@@ -222,7 +272,7 @@ module inputs
                             print *, ""
                             stop
                         endif
-                        if (thmucutmin < 0 .or. thmucutmin > 180) then
+                        if (thmucutmin < 0.0_r14 .or. thmucutmin > 180.0_r14) then
                             print*, "Input error! Polar angle cut minumum for muons 'thmucutmin'&
                              &(",thmucutmin, ") MUST be a real number between 0 and 180! Aborting..."
                             print *, ""
@@ -236,7 +286,7 @@ module inputs
                             print *, ""
                             stop
                         endif
-                        if (thmucutmax < 0 .or. thmucutmax > 180) then
+                        if (thmucutmax < 0.0_r14 .or. thmucutmax > 180.0_r14) then
                             print*, "Input error! Polar angle cut maximum for muons 'thmucutmax'&
                              &(",thmucutmax, ") MUST be a real number between 0 and 180! Aborting..."
                             print *, ""
@@ -249,7 +299,7 @@ module inputs
                             print *, ""
                             stop
                         endif
-                        if (thgamcutmin < 0 .or. thgamcutmin > 180) then
+                        if (thgamcutmin < 0.0_r14 .or. thgamcutmin > 180.0_r14) then
                             print*, "Input error! Polar angle cut minumum for ISR photon 'thgamcutmin'&
                             & (",thgamcutmin, ") MUST be a real number between 0 and 180! Aborting..."
                             print *, ""
@@ -262,7 +312,7 @@ module inputs
                             print *, ""
                             stop
                         endif
-                        if (thgamcutmax < 0 .or. thgamcutmax > 180) then
+                        if (thgamcutmax < 0.0_r14 .or. thgamcutmax > 180.0_r14) then
                             print*, "Input error! Polar angle cut maximum for ISR photon 'thgamcutmax'&
                             & (",thgamcutmax, ") MUST be a real number between 0 and 180! Aborting..."
                             print *, ""
@@ -275,38 +325,41 @@ module inputs
                             print *, ""
                             stop
                         endif
-                        if (qqcutmin < 0) then
+                        if (qqcutmin < 0.0_r14) then
                             print*, "Input error! Minimum of invariant mass squared of outgoing"&
                             " muons 'qqcutmin' (",qqcutmin, ") MUST be positive [GeV^2]! Aborting..."
                             print *, ""
                             stop
                         endif
-                    else if (opt == 'gmin') then
-                        read(optval, *, iostat=ios) gmin
-                        if (ios /= 0) then
-                            print *, "Input error! Value given for 'gmin' is not valid! Aborting..."
-                            print *, ""
-                            stop
-                        endif
-                        if (gmin < 0) then
-                            print*, "Input error! Minimum energy of isr photon"&
-                            " 'gmin' (",gmin, ") MUST be positive [GeV]! Aborting..."
-                            print *, ""
-                            stop
-                        endif
                     else if (opt == 'qqcutmax') then
+                        qqcutmaxflg = .true.
                         read(optval, *, iostat=ios) qqcutmax
                         if (ios /= 0) then
                             print *, "Input error! Value given for 'qqcutmax' is not valid! Aborting..."
                             print *, ""
                             stop
                         endif
-                        if (qqcutmax < 0) then
+                        if (qqcutmax < 0.0_r14) then
                             print*, "Input error! Maximum of invariant mass squared of outgoing"&
                             " muons 'qqcutmax' (",qqcutmax, ") MUST be positive [GeV^2]! Aborting..."
                             print *, ""
                             stop
                         endif
+                    else if (opt == 'gmin') then
+                        gminflg = .true.
+                        read(optval, *, iostat=ios) gmin
+                        if (ios /= 0) then
+                            print *, "Input error! Value given for 'gmin' is not valid! Aborting..."
+                            print *, ""
+                            stop
+                        endif
+                        if (gmin < 0.0_r14) then
+                            print*, "Input error! Minimum energy of isr photon"&
+                            " 'gmin' (",gmin, ") MUST be positive [GeV]! Aborting..."
+                            print *, ""
+                            stop
+                        endif
+                    
 
                     endif
                 else
@@ -318,13 +371,13 @@ module inputs
             ! Processing of loaded input
 
             sinv = cme**2
-            qqmax = sinv-2.*sqrt(sinv)*gmin ! Maximum invariant mass squared of the mu-mu system
+            if (isr .eqv. .true.) qqmax = sinv-2.0_r14*sqrt(sinv)*gmin ! Maximum invariant mass squared of the mu-mu system
             costhgammin = cos(radtodeg*thgamcutmax)
             costhgammax = cos(radtodeg*thgamcutmin)
             costhmumin = cos(radtodeg*thmucutmax)
             costhmumax = cos(radtodeg*thmucutmin)
 
-            if (qqcutmax <= -998. .and. qqcutmax >= -1000.) qqcutmax = sinv !!! Numerical problem?
+            if (qqcutmaxflg .eqv. .false.) qqcutmax = sinv 
 
             if (thmucutmin >= thmucutmax) then
                 print '(A, f0.2, A, f0.2, A)', "Input error! 'thmucutmin' value (", thmucutmin, ")&
@@ -350,14 +403,51 @@ module inputs
             if (qqcutmin >= sinv) then
                 print '(A, f0.2, A, f0.2, A)', "Input error! 'qqcutmin' value &
                 &(", qqcutmin, ") must be lower than 'cme' value squared (", sinv, ")"
-
                 print *, ""
                 stop    
             endif
 
+            if ( seedflg .eqv. .false. ) then
+                print*, "No value given for generation seed 'seed' in input card! Aborting..."
+                print*, ""
+                stop
+            end if
+            if ( isrflg .eqv. .false. ) then
+                print*, "No option given ('n'/'no','y'/'yes') for ISR generation 'isr' in input card! Aborting..."
+                print*, ""
+                stop
+            end if
+
+            if ( cmeflg .eqv. .false. ) then
+                print*, "No value given for center of mass energy [GeV] 'cme' in input card! Aborting..."
+                print*, ""
+                stop
+            end if
+
+            if ( ngenflg .eqv. .false. ) then
+                print*, "No value given for number of events to generate 'ngen' in input card! Aborting..."
+                print*, ""
+                stop
+            end if
+            if ( (isr .eqv. .true.) .and. (nmaxflg .eqv. .false.) ) then
+                print*, "No value given for number of events to generate in order to find integrand&
+                & maximum 'nmax' in input card! Aborting..."
+                print*, ""
+                stop
+            end if
+            if ( (isr .eqv. .true.) .and. (gminflg .eqv. .false.) ) then
+                print*, "No value given for minimum ISR photon energy [GeV] 'gmin' in input card! Aborting..."
+                print*, ""
+                stop
+            end if
+            if ( (histsave /= '') .and. (nbinflg .eqv. .false.) ) then
+                print*, "No bin number for the histograms 'nbin' given in input card! Aborting..."
+                print*, ""
+                stop
+            end if
+
         close(unit=iu)
 
-        print*, ""
         print*, "Loading of input card completed!"
         print*, ""
         print*, "============================================"
@@ -365,7 +455,7 @@ module inputs
         print '(A, i0)', "    Seed : ", seed(1)
         print*, ""
         if ( isr .eqv. .false. ) then
-            print '(A)', "   Generation mode : BORN"
+            print '(A)', "    Generation mode : BORN"
             print*, ""
         else
             print '(A)', "    Generation mode : ISR"
@@ -400,8 +490,8 @@ module inputs
                 print '(A, f0.2, A, f0.2)', "    Angular cuts on ISR photon :&
                 & theta min = ", thgamcutmin, " theta max =  ", thgamcutmax
             end if 
+            print*, ""
         endif
-        print*, ""
         if ( compareals(qqcutmin,0.0_r14) .and. compareals(qqcutmax,sinv) ) then
             print '(A)', "    No cuts on muon system invariant mass"
         else 
@@ -410,8 +500,8 @@ module inputs
         print*, ""
         if ( isr .eqv. .true. ) then
             print '(A, f0.2, A)', "    Minimum ISR photon energy = ", gmin, " GeV"
+            print*, ""
         endif 
-        print*, ""
         print*, "============================================"
         print*, ""
         
@@ -426,7 +516,7 @@ module utilities
     implicit none
 
     contains
-        function inverseCDF(x) !!! Putting it inside the module eventgen doesn't work
+        function inverseCDF(x)
             real(r14), intent(in) :: x
             real(r14) :: inverseCDF
             
@@ -448,17 +538,16 @@ module utilities
             boostE = boostvector(0)
             boostp = sqrt(boostvector(1)**2+boostvector(2)**2+ boostvector(3)**2)
             beta  = boostp/boostE
-            gamma = 1./sqrt(1.-beta**2)
+            gamma = 1.0_r14/sqrt(1.0_r14-beta**2)
             ! Invert the spatial components since we are DEBOOSTING (use - sign)
             boostcosth = -boostvector(3)/boostp
-            boostsinth = sqrt(1.-boostcosth**2)
+            boostsinth = sqrt(1.0_r14-boostcosth**2)
             boostcosphi   = -boostvector(1)/(boostp*boostsinth)
             boostsinphi   = -boostvector(2)/(boostp*boostsinth)
 
 
    
             ! Lorentz boost matrix elements for a boost in the direction of (theta, phi)
-            !!!! Check if correct
             !  lormtrx = 
             !  | gamma    -gamma*beta*v_x  -gamma*beta*v_y  -gamma*beta*v_z  |
             !  | -gamma*beta*v_x ...                                         |
@@ -477,17 +566,17 @@ module utilities
             lormtrx(3,0) = -gamma * beta * boostcosth
 
             ! Spatial-spatial components
-            lormtrx(1,1) = 1.+ (gamma-1.)*(boostsinth**2 * boostcosphi**2)
+            lormtrx(1,1) = 1.0_r14+ (gamma-1.)*(boostsinth**2 * boostcosphi**2)
             lormtrx(1,2) = (gamma-1.)*(boostsinth**2 * boostcosphi * boostsinphi)
             lormtrx(1,3) = (gamma-1.)*(boostsinth * boostcosth * boostcosphi)
 
             lormtrx(2,1) = (gamma-1.)*(boostsinth**2 * boostcosphi * boostsinphi)
-            lormtrx(2,2) = 1.+ (gamma-1.)*(boostsinth**2 * boostsinphi**2)
+            lormtrx(2,2) = 1.0_r14+ (gamma-1.)*(boostsinth**2 * boostsinphi**2)
             lormtrx(2,3) = (gamma-1.)*(boostsinth * boostcosth * boostsinphi)
 
             lormtrx(3,1) = (gamma-1.)*(boostsinth * boostcosth * boostcosphi)
             lormtrx(3,2) = (gamma-1.)*(boostsinth * boostcosth * boostsinphi)
-            lormtrx(3,3) = 1.+ (gamma-1.)*(boostcosth**2)
+            lormtrx(3,3) = 1.0_r14+ (gamma-1.)*(boostcosth**2)
 
             do k = 0, 3
                 deboosted(ii,k) = 0.
@@ -529,11 +618,11 @@ module histogram
     real(r14) :: enemu_max, pmodmu_max, pgam_max
     integer :: allerr
     contains
-        subroutine inithistsborn() !!! Add other histos
+        subroutine inithistsborn()
 
             enemu_max = cme/2
             pmodmu_max = sqrt(enemu_max**2-mmu**2)
-            allocate(h_pmod1(0:nbins+1,2), stat=allerr) !!! Deallocate stuff at the end
+            allocate(h_pmod1(0:nbins+1,2), stat=allerr)
             if (allerr /= 0) then
                 print *, "Mu- p modulus histogram allocation request denied, aborting!"
                 print*, ""
@@ -558,7 +647,7 @@ module histogram
             
         end subroutine inithistsborn
 
-        subroutine inithistsisr() !!! Add other histos
+        subroutine inithistsisr()
 
             enemu_max = cme/2
             pmodmu_max = sqrt(enemu_max**2-mmu**2)
@@ -650,29 +739,30 @@ module histogram
             
         end subroutine updatehist
 
-        subroutine endhistisr(hist,histmin,histmax) !!! Review if errors are correct
+        subroutine endhistisr(hist,histmin,histmax)
             real(r14), intent(inout) :: hist(0:,:) 
             real(r14), intent(in) :: histmin, histmax
             integer :: bb
 
             do bb = 0, nbins+1
                 hist(bb,2) = sqrt(hist(bb,2))
-                !hist(bb,2) = intemax * sqrt((hist(bb,1)/ngen-(hist(bb,1)/ngen)**2)/ngen)
-                hist(bb,1) = intemax/ngen*hist(bb,1)
-                hist(bb,2) = intemax/ngen*hist(bb,2)
+                hist(bb,1) = intemax/dble(ngen)*hist(bb,1)
+                hist(bb,2) = intemax/dble(ngen)*hist(bb,2)
                 hist(bb,1)=hist(bb,1)*dble(nbins)/(histmax-histmin)
                 hist(bb,2)=hist(bb,2)*dble(nbins)/(histmax-histmin)
             enddo
         end subroutine endhistisr
 
-        subroutine endhistborn(hist,histmin,histmax) !!! Review if errors are correct
+        subroutine endhistborn(hist,histmin,histmax)
             real(r14), intent(inout) :: hist(0:,:) 
             real(r14), intent(in) :: histmin, histmax
             integer :: bb
 
-            do bb = 0, nbins+1 !!!! what to do in born case to obtain sigma
+            do bb = 0, nbins+1
                 hist(bb,2) = sqrt(hist(bb,2))
-                !hist(bb,2) = sqrt(ngen*(hist(bb,1)/ngen-(hist(bb,1)/ngen)**2))
+                hist(bb,1)=hist(bb,1)*bornsigma/dble(ngen)
+                hist(bb,2)=hist(bb,2)*bornsigma/dble(ngen)
+                hist(bb,2)=hist(bb,2)*dble(nbins)/(histmax-histmin)
                 hist(bb,1)=hist(bb,1)*dble(nbins)/(histmax-histmin)
                 hist(bb,2)=hist(bb,2)*dble(nbins)/(histmax-histmin)
             enddo
@@ -711,10 +801,10 @@ module eventgen
     use histogram
     use utilities
     implicit none
-    real(r14) :: inte, tmpintemin = 0., tmpintemax = 0., sinthmu, phimu, cosphimu, &
-    sinphimu, sinthgam, Muontensor(0:3,0:3), Electrontensor(0:3,0:3), invampl, naccpt = 0.
+    real(r14) :: inte, tmpintemin = 0.0_r14, tmpintemax = 0.0_r14, sinthmu, phimu, cosphimu, &
+    sinphimu, sinthgam, Muontensor(0:3,0:3), Electrontensor(0:3,0:3), invampl, naccpt = 0.0_r14
     real(r14) :: rndm(7), jacqq, jacgam, jacmuang, pgamvirt(0:3), z, ppos(0:3), pel(0:3), &
-    eff, sigma, dsigma, bornsigma
+    eff, sigma, dsigma 
     real(r14), allocatable :: pmu1(:,:), pmu2(:,:), pmod1(:), pmod2(:), pgam(:,:), costhmu1(:), &
     costhmu2(:), costhgam(:), qq(:), wght(:)  ! Reduce to fewer higher dimensional arrays 
     integer(i10) :: iev, arraylen
@@ -758,7 +848,7 @@ module eventgen
 
             else ! ISR CASE
 
-                allocate(pmu2(arraylen,0:3), stat=err) !!! Maybe move these allocations to a subroutine
+                allocate(pmu2(arraylen,0:3), stat=err) 
                 if (err /= 0) then
                     print *, "pmu1 array allocation request denied, aborting!"
                     print*, ""
@@ -836,7 +926,7 @@ module eventgen
             if (accepted) then
 
                 accpt(iev) = 1
-                naccpt = naccpt + 1. 
+                naccpt = naccpt + 1.0_r14 
 
                 if (histsave /= '') then
             
@@ -874,7 +964,7 @@ module eventgen
 
             if (accepted) then
 
-                inte = gev2nbarn*jacqq*jacgam*jacmuang/(4.*pi*sinv)*invampl
+                inte = gev2nbarn*jacqq*jacgam*jacmuang/(4.0_r14*pi*sinv)*invampl
 
                 if (run == 1) then
                     if(inte > tmpintemax) tmpintemax = inte
@@ -956,7 +1046,7 @@ module eventgen
 
             real(r14) :: x, fak1, amin, amax, a, bmin, b, p, ppp, y
             x = rndm(1)
-            fak1 = -1./sinv
+            fak1 = -1.0_r14/sinv
             amin = fak1*log(sinv-qqmin)
             amax = fak1*log(sinv-qqmax)
             a = amax-amin
@@ -972,7 +1062,7 @@ module eventgen
                 qq(iev) = sinv*exp(sinv*y)
 
             endif
-            jacqq = (a+b)/(1./(sinv*(sinv-qq(iev))) + 1./sinv/qq(iev))
+            jacqq = (a+b)/(1.0_r14/(sinv*(sinv-qq(iev))) + 1.0_r14/sinv/qq(iev))
 
             !print*, " a = ", a, " b = ", b, " qq = ", qq(iev), " y = ", y, " amax = ", amax, " ppp = ", ppp
 
@@ -984,14 +1074,14 @@ module eventgen
             real(r14) :: x, phigam, b, cmin, cmax, y, sinthgam
             integer :: ii
             x = rndm(3)
-            phigam = 2.*pi*rndm(4)
-            b = sqrt(1. - 4.*me**2/sinv)
-            cmin = log((1.+b*costhgammin)/(1.-b*costhgammin))/(2.*b)
-            cmax = log((1.+b*costhgammax)/(1.-b*costhgammax))/(2.*b)
+            phigam = 2.0_r14*pi*rndm(4)
+            b = sqrt(1.0_r14 - 4.0_r14*me**2/sinv)
+            cmin = log((1.0_r14+b*costhgammin)/(1.0_r14-b*costhgammin))/(2.0_r14*b)
+            cmax = log((1.0_r14+b*costhgammax)/(1.0_r14-b*costhgammax))/(2.0_r14*b)
             y = cmin+x*(cmax-cmin)
             costhgam(iev) = tanh(b*y)/b
-            sinthgam = sqrt(1.-costhgam(iev)**2)
-            jacgam = 2.*pi*(1.- b**2 * costhgam(iev)**2)*(cmax-cmin)
+            sinthgam = sqrt(1.0_r14-costhgam(iev)**2)
+            jacgam = 2.0_r14*pi*(1.0_r14- b**2 * costhgam(iev)**2)*(cmax-cmin)
 
             
             pgam(iev,0) = cme/2*(1-qq(iev)/sinv)
@@ -1012,10 +1102,10 @@ module eventgen
             real(r14) :: x, costhmucm, sinthmucm, phimucm, pmodcm, tmpvect(0:3)
             integer :: ii
             x = rndm(5)
-            phimucm = 2.*pi*rndm(6)
+            phimucm = 2.0_r14*pi*rndm(6)
             costhmucm = costhmumin+(costhmumax-costhmumin)*x
-            jacmuang = 2.*pi*(costhmumax-costhmumin)
-            sinthmucm = sqrt(1.-costhmucm*costhmucm)
+            jacmuang = 2.0_r14*pi*(costhmumax-costhmumin)
+            sinthmucm = sqrt(1.0_r14-costhmucm*costhmucm)
             pmu1(iev,0) = sqrt(qq(iev))/2
             pmodcm = sqrt( pmu1(iev,0)**2 - mmu**2 )
             pmu1(iev,1) = pmodcm * sinthmucm * cos(phimucm)
@@ -1047,30 +1137,30 @@ module eventgen
             real(r14) :: dps, a00, a11, a12, a22, m2, q2, uq2, b, x, y1, y2, globfact
             integer :: mu,nu
                 
-            dps =  sqrt(1.-4.*mmu**2/qq(iev))/(32.*pi**2)  ! Phase space factors
+            dps =  sqrt(1.0_r14-4.0_r14*mmu**2/qq(iev))/(32.0_r14*pi**2)  ! Phase space factors
             do mu = 0,3
                 do nu = 0,3
-                    Muontensor(mu,nu) = 16.*pi*alpha*(pmu2(iev,mu)*pmu1(iev,nu)+&
-                    pmu1(iev,mu)*pmu2(iev,nu)-qq(iev)/2.*metric(mu,nu))*dps
+                    Muontensor(mu,nu) = 16.0_r14*pi*alpha*(pmu2(iev,mu)*pmu1(iev,nu)+&
+                    pmu1(iev,mu)*pmu2(iev,nu)-qq(iev)/2.0_r14*metric(mu,nu))*dps
                 enddo
             enddo
 
             m2 = me*me/sinv
             q2 = qq(iev)/sinv
-            uq2 = 1.-q2
-            b = sqrt(1.-4.*m2)
+            uq2 = 1.0_r14-q2
+            b = sqrt(1.0_r14-4.0_r14*m2)
             x = b*costhgam(iev)
-            y1 = uq2*(1.-x)/2.
-            y2 = uq2*(1.+x)/2.
-            globfact = (4.*pi*alpha/sinv)**2/(q2**2)
+            y1 = uq2*(1.0_r14-x)/2.
+            y2 = uq2*(1.0_r14+x)/2.
+            globfact = (4.0_r14*pi*alpha/sinv)**2/(q2**2)
 
 
-            a00 = globfact*( 2.*m2*Q2*uq2*uq2/(y1*y2)- (2.*q2+y1*y1+y2*y2) )/(y1*y2)
-            a11 = globfact*(8.*m2/y2-4.*q2/y1)/y2
-            a22 = globfact*(8.*m2/y1-4.*q2/y2)/y1
-            a12 = -globfact*8.*m2/(y1*y2)
+            a00 = globfact*( 2.0_r14*m2*Q2*uq2*uq2/(y1*y2)- (2.0_r14*q2+y1*y1+y2*y2) )/(y1*y2)
+            a11 = globfact*(8.0_r14*m2/y2-4.0_r14*q2/y1)/y2
+            a22 = globfact*(8.0_r14*m2/y1-4.0_r14*q2/y2)/y1
+            a12 = -globfact*8.0_r14*m2/(y1*y2)
 
-            dps = (1.-qq(iev)/sinv)/(32.*pi**2)  ! Phase space factor
+            dps = (1.0_r14-qq(iev)/sinv)/(32.0_r14*pi**2)  ! Phase space factor
 
             do mu = 0,3
                 do nu = 0,3
@@ -1089,13 +1179,13 @@ module eventgen
 
             call maketensors()
 
-            invampl = 0.
+            invampl = 0.0_r14
             do mu = 0,3
-                metric1 = 1.
-                if (mu.eq.0) metric1 = -1.
+                metric1 = 1.0_r14
+                if (mu.eq.0) metric1 = -1.0_r14
                 do nu = 0,3
-                    metric2 = 1.
-                if (nu.eq.0) metric2 = -1.               
+                    metric2 = 1.0_r14
+                if (nu.eq.0) metric2 = -1.0_r14               
                 invampl = invampl + metric1*metric2*Electrontensor(mu,nu)*Muontensor(mu,nu) 
                 enddo
             enddo
@@ -1148,64 +1238,87 @@ module output
 
     contains
         subroutine writevents
-            if (evsave /= '') then !!! Put it in the main program
-                inquire(file=evsave, exist=exists)
-                if(exists) then
-                    print *, "Writing events to file ", trim(evsave), " (overwriting)..."
-                    print*, ""
-                else
-                    print *, "Writing events to file", trim(evsave)
-                    print*, ""
+            inquire(file=evsave, exist=exists)
+            if(exists) then
+                print *, "Writing events to file ", trim(evsave), " (overwriting)..."
+                print*, ""
+            else
+                print *, "Writing events to file", trim(evsave)
+                print*, ""
+            end if
+            open(newunit=ou, file=evsave, iostat=ios)
+            if (ios == 0) then
+                if ( isr .eqv. .false. ) then
+                    write(ou,*) "==========================================&
+                    &======================================"
+                    write(ou,*) "                              TOYGENERATOR EVENTS&
+                    &                                       "
+                    write(ou,*) "==========================================&
+                    &======================================"
+                    write(ou,*) ""
+                    write(ou,'(A, i0, A, f0.2, A)') "   Born generation using seed = ", seed(1), " at center of mass&
+                    & energy = ", cme, " GeV"
+                    write(ou,*) ""
+                    write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
+                    'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq'
+                    do idx = 1, ngen
+                        if (accpt(idx) == 1) then
+                            write (ou,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,0), pmod1(idx), &
+                            radtodeg*acos(costhmu1(idx)), -pmu1(idx,1), -pmu1(idx,2), -pmu1(idx,3), &
+                            pmu1(idx,0), pmod1(idx), 180-radtodeg*acos(costhmu1(idx)), sinv
+                        endif
+                    end do
                 end if
-                open(newunit=ou, file=evsave, iostat=ios)
-                if (ios == 0) then
-                    if ( isr .eqv. .false. ) then
-                        write(ou, *) 'Output file of Born generation...' !!! More details on the generation
+                if ( isr .eqv. .true. ) then
+                    if ( wghtopt .eqv. .false. ) then
+                        write(ou,*) "==========================================&
+                        &======================================"
+                        write(ou,*) "                              TOYGENERATOR EVENTS&
+                        &                                       "
+                        write(ou,*) "==========================================&
+                        &======================================"
+                        write(ou,*) ""
+                        write(ou,'(A, i0, A, f0.2, A)') "   ISR generation using seed = ", seed(1), " at center of mass&
+                        & energy = ", cme, " GeV"
+                        write(ou,*) ""
                         write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
-                        'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq' !!! More details on the generation
+                        'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq', 'pgamx', 'pgamy', 'pgamz', 'Egam', 'thgam'
                         do idx = 1, ngen
                             if (accpt(idx) == 1) then
                                 write (ou,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,0), pmod1(idx), &
-                                radtodeg*acos(costhmu1(idx)), -pmu1(idx,1), -pmu1(idx,2), -pmu1(idx,3), &
-                                pmu1(idx,0), pmod1(idx), 180-radtodeg*acos(costhmu1(idx)), sinv
+                                radtodeg*acos(costhmu1(idx)), pmu2(idx,1), pmu2(idx,2), pmu2(idx,3), &
+                                pmu2(idx,0), pmod2(idx), radtodeg*acos(costhmu2(idx)), qq(idx), pgam(idx,1)&
+                                , pgam(idx,2), pgam(idx,3), pgam(idx,0), radtodeg*acos(costhgam(idx))
                             endif
                         end do
                     end if
-                    if ( isr .eqv. .true. ) then
-                        if ( wghtopt .eqv. .false. ) then
-                            write(ou, *) 'Output file of ISR generation...' !!! More details on the generation
-                            write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
-                            'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq', 'pgamx', 'pgamy', 'pgamz', 'Egam', 'thgam'
-                            do idx = 1, ngen
-                                if (accpt(idx) == 1) then
-                                    write (ou,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,0), pmod1(idx), &
-                                    radtodeg*acos(costhmu1(idx)), pmu2(idx,1), pmu2(idx,2), pmu2(idx,3), &
-                                    pmu2(idx,0), pmod2(idx), radtodeg*acos(costhmu2(idx)), qq(idx), pgam(idx,1)&
-                                    , pgam(idx,2), pgam(idx,3), pgam(idx,0), radtodeg*acos(costhgam(idx))
-                                endif
-                            end do
-                        end if
-                        if ( wghtopt .eqv. .true. ) then
-                            write(ou, *) 'Output file of weighted ISR generation...' !!! More details on the generation
-                            write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
-                            'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq', 'pgamx', 'pgamy', 'pgamz', 'Egam', 'thgam', 'wght'
-                            do idx = 1, ngen
-                                if (wght(idx) >= 0) then
-                                    write (ou,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,0), pmod1(idx), &
-                                    radtodeg*acos(costhmu1(idx)), pmu2(idx,1), pmu2(idx,2), pmu2(idx,3), &
-                                    pmu2(idx,0), pmod2(idx), radtodeg*acos(costhmu2(idx)), qq(idx), pgam(idx,1)&
-                                    , pgam(idx,2), pgam(idx,3), pgam(idx,0), radtodeg*acos(costhgam(idx)), wght(idx)
-                                endif
-                            end do
-                        end if
+                    if ( wghtopt .eqv. .true. ) then
+                        write(ou,*) "==========================================&
+                        &======================================"
+                        write(ou,*) "                              TOYGENERATOR EVENTS&
+                        &                                       "
+                        write(ou,*) "==========================================&
+                        &======================================"
+                        write(ou,*) ""
+                        write(ou,'(A, i0, A, f0.2, A)') "   Weighted ISR generation using seed = ", seed(1), " at center of mass&
+                        & energy = ", cme, " GeV"
+                        write(ou,*) ""
+                        write(ou, '(*(A6, 3x))') 'px-',   'py-',  'pz-',    'E-',    'pmod-',    'th-',    'px+',   &
+                        'py+', 'pz+', 'E+',  'pmod+',  'th+', 'qq', 'pgamx', 'pgamy', 'pgamz', 'Egam', 'thgam', 'wght'
+                        do idx = 1, ngen
+                            if (wght(idx) >= 0) then
+                                write (ou,'(*(f6.2, 3x))') pmu1(idx,1), pmu1(idx,2), pmu1(idx,3), pmu1(idx,0), pmod1(idx), &
+                                radtodeg*acos(costhmu1(idx)), pmu2(idx,1), pmu2(idx,2), pmu2(idx,3), &
+                                pmu2(idx,0), pmod2(idx), radtodeg*acos(costhmu2(idx)), qq(idx), pgam(idx,1)&
+                                , pgam(idx,2), pgam(idx,3), pgam(idx,0), radtodeg*acos(costhgam(idx)), wght(idx)
+                            endif
+                        end do
                     end if
-                    close(unit=ou)
-                else
-                    print *, 'ERROR while opening file ', trim(evsave)
                 end if
-            else    
-                return
-            endif
+                close(unit=ou)
+            else
+                print *, 'ERROR while opening file ', trim(evsave)
+            end if
             
         end subroutine writevents
 
@@ -1229,47 +1342,61 @@ module output
         end subroutine appendhist
 
         subroutine writehists
-            if (histsave /= '') then !!! Redundant?
 
-                inquire(file=histsave, exist=exists)
-                if(exists) then
-                    print *, "Writing histograms to file ", trim(histsave), " (overwriting)..."
-                    print*, ""
-                else
-                    print *, "Writing histograms to file", trim(histsave)
-                    print*, ""
-                end if
+            inquire(file=histsave, exist=exists)
+            if(exists) then
+                print *, "Writing histograms to file ", trim(histsave), " (overwriting)..."
+                print*, ""
+            else
+                print *, "Writing histograms to file", trim(histsave)
+                print*, ""
+            end if
 
-                open(newunit=hu, file=histsave, iostat=ios)    
-                if (ios == 0) then
-                    if ( isr .eqv. .false. ) then
-                        call endbornhistos()
-                        write(hu, *) 'Histogram file of Born generation...' !!! More details on the generation
-                        call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
-                        call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
-                        call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
-                    end if
-                    if ( isr .eqv. .true. ) then
-                        call endisrhistos()
-                        write(hu, *) 'Histogram file of ISR generation...' !!! More details on the generation
-                        call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
-                        call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
-                        call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
-                        call appendhist(hu, h_pmod2, "h_pmod2", 0.0_r14, pmodmu_max)
-                        call appendhist(hu, h_emu2, "h_emu2", 0.0_r14, enemu_max)
-                        call appendhist(hu, h_thmu2, "h_thmu2", 0.0_r14, 180.0_r14)
-                        call appendhist(hu, h_pgam, "h_pgam", 0.0_r14, pgam_max)
-                        call appendhist(hu, h_thgam, "h_thgam", 0.0_r14, 180.0_r14)
-                        call appendhist(hu, h_qq, "h_qq", 0.0_r14, qqmax)
-                        
-                    end if
-                    close(unit=hu)
-                else
-                    print *, 'ERROR while opening file ', evsave
+            open(newunit=hu, file=histsave, iostat=ios)    
+            if (ios == 0) then
+                if ( isr .eqv. .false. ) then
+                    call endbornhistos()
+                    write(hu,*) "==========================================&
+                    &======================================"
+                    write(hu,*) "                              TOYGENERATOR HISTOGRAMS&
+                    &                                       "
+                    write(hu,*) "==========================================&
+                    &======================================"
+                    write(hu,*) ""
+                    write(hu,'(A, i0, A, f0.2, A)') "   Born generation using seed = ", seed(1), " at center of mass&
+                    & energy = ", cme, " GeV"
+                    write(hu,*) ""
+                    call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
+                    call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
+                    call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
                 end if
-            else    
-                return
-            endif
+                if ( isr .eqv. .true. ) then
+                    call endisrhistos()
+                    write(hu,*) "==========================================&
+                    &======================================"
+                    write(hu,*) "                              TOYGENERATOR HISTOGRAMS&
+                    &                                       "
+                    write(hu,*) "==========================================&
+                    &======================================"
+                    write(hu,*) ""
+                    write(hu,'(A, i0, A, f0.2, A)') "   ISR generation using seed = ", seed(1), " at center of mass&
+                    & energy = ", cme, " GeV"
+                    write(hu,*) ""
+                    call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
+                    call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
+                    call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
+                    call appendhist(hu, h_pmod2, "h_pmod2", 0.0_r14, pmodmu_max)
+                    call appendhist(hu, h_emu2, "h_emu2", 0.0_r14, enemu_max)
+                    call appendhist(hu, h_thmu2, "h_thmu2", 0.0_r14, 180.0_r14)
+                    call appendhist(hu, h_pgam, "h_pgam", 0.0_r14, pgam_max)
+                    call appendhist(hu, h_thgam, "h_thgam", 0.0_r14, 180.0_r14)
+                    call appendhist(hu, h_qq, "h_qq", 0.0_r14, qqmax)
+                    
+                end if
+                close(unit=hu)
+            else
+                print *, 'ERROR while opening file ', evsave
+            end if
             
         end subroutine writehists
 
@@ -1405,22 +1532,20 @@ program toygenerator
 
         if (histsave /= '') call inithistsborn()    
 
-        do iev = 1, ngen !!! THINK ABOUT PARALLELISATION
+        do iev = 1, ngen 
 
             call random_number(rndm)
             call genborn()
 
         end do
         
+        if (evsave /= '') call writevents()
+        if (histsave /= '') call writehists()
 
-        call writevents()
-        call writehists()
-
-        bornsigma = gev2nbarn*4.*pi/3.*alpha**2/sinv
+        bornsigma = gev2nbarn*4.0_r14*pi/3.0_r14*alpha**2/sinv
         eff = dble(naccpt)/ngen
         sigma = bornsigma * eff
         dsigma = bornsigma/ngen * sqrt(ngen * eff * (1-eff))
-        print *, ""
         
 
 
@@ -1429,8 +1554,7 @@ program toygenerator
         if (histsave /= '') call inithistsisr()
         run = 1
 
-        do iev = 1, nmax !!! Think about parallelisation
-        !do concurrent (iev : 1, nmax)
+        do iev = 1, nmax 
              call random_number(rndm)
              call genisr()
             
@@ -1445,8 +1569,8 @@ program toygenerator
             call genisr()
             
         end do
-        call writevents()
-        call writehists()
+        if (evsave /= '') call writevents()
+        if (histsave /= '') call writehists()
 
         !sigma = integral = fraction of accepted (naccpt/ngen) * max (intemax) * range of random variables (1)  
 

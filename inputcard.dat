@@ -7,6 +7,7 @@ isr y
 evsave ciao.dat
 thmucutmin 0
 thmucutmax 180
-nbins 100
 histsave hist.out
+nbins 100
+gmin 0.01
 
