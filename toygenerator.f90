@@ -85,7 +85,6 @@ module inputs
             print*, ""
             print*, ""
             print*, "***********************************************************************************"
-            print*, "***********************************************************************************"
             print*, ""
             print*, ""
 
@@ -1515,6 +1514,42 @@ module output
             
         end subroutine writeout
 
+        subroutine printout
+            print*, ""
+            print*, "==========================================&
+                    &======================================"
+                    print*,  "                              GENERATION RESULTS&
+                    &                                       "
+                    print*, "==========================================&
+                    &======================================"
+            if ( isr .eqv. .false. ) then ! BORN CASE
+                    print*,  ""
+                    print '(A, i0, A, i0, A, f5.3)', " ", int(naccpt), " events accepted of ", ngen, " events generated&
+                    & ====> Generation efficiency = ", eff 
+                    print*,  ""
+                    print '(A, f0.2, A)', " Total Born cross section without cuts = &
+                    &", bornsigma, " nb"
+                    print*,  ""
+                    print '(A, f0.2, A, f0.2, A)', " Total Born cross section with&
+                    & selected cuts= ", sigma, " +- ", dsigma, " nb"
+                    print*,  ""
+                    print*,  "==========================================&
+                    &======================================"
+                end if
+                if ( isr .eqv. .true. ) then
+                    print*,  "" 
+                    print '(A, i0, A, i0, A, f5.3)', " ",int(naccpt), " events accepted of ", ngen, " events generated&
+                    & ====> Generation efficiency = ", eff 
+                    print*,  ""
+                    print '(A, f0.2, A, f0.2, A)', " Total ISR cross section with selected cuts= ", sigma, " +- ", dsigma, " nb"
+                    print*,  ""
+
+                    
+                end if
+
+            
+        end subroutine printout
+
 end module output
 
 
@@ -1594,9 +1629,12 @@ program toygenerator
 
     if ( outsave /= '' )  call writeout()
 
+    call printout()
+
     print*, ""
     print*, "***********************************************************************************"
     print*, "***********************************************************************************"
+    print*, ""
     print*, ""
 
 end program toygenerator

@@ -1,0 +1,10 @@
+# Ignore compiled module files
+*.mod
+
+#ignore python utilities
+*.py
+
+# Ignore outfiles
+*.outfiles
+*.dat
+/histogram_plots

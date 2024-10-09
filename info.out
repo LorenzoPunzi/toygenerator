@@ -2,22 +2,19 @@
                                TOYGENERATOR OUTPUT                                       
  ================================================================================
  
-* ISR generation (NLO) using seed = 5234
+* Born generation (LO) using seed = 5235
  
-* Weighted generation : OFF 
- 
-* Center of mass energy = 1.00 GeV
+* Center of mass energy = 1.00
+ GeV
  
 * No angular cuts on muons
  
-* No angular cuts on ISR photon
- 
 * No cuts on muon system invariant mass
  
-* Minimum ISR photon energy = .01 GeV
+* 100 events accepted of 100 events generated ====> Generation efficiency = 1.000
  
-* 50 events accepted of 100 events generated ====> Generation efficiency = 0.500
+* Total Born cross section without cuts = 86.85 nb
  
-* Total ISR cross section with selected cuts= 14.62 +- 1.46 nb
+* Total Born cross section with selected cuts= 86.85 +- .00 nb
  
  ================================================================================
