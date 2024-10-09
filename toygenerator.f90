@@ -44,7 +44,7 @@ module inputs
 
     use numeric
     implicit none
-    character(len = 100) :: cardname, readline, opt, optval, evsave = '', histsave = ''
+    character(len = 100) :: cardname, readline, opt, optval, evsave = '', histsave = '', outsave = ''
     integer :: nargs, iu, ios, seed(8), nbins
     integer(i10) :: ngen, nmax
     logical :: exists, wghtopt = .false., isr = .false., cmeflg = .false., ngenflg = .false., &
@@ -100,15 +100,15 @@ module inputs
                 print*, "where an ISR gamma can be present in the final state. It generates the relevant"
                 print*, "kinematical quantities event by event, and calculates the total cross section"
                 print*, "with the selected cuts. The cross section, the seed used and other important"
-                print*, "information are stored in a file named 'info.out' in the same directory the "
-                print*, "program is run in. The generation can be performed in a 'weighted' manner, "
-                print*, "where all events are accepted but stored witha  weight < 1 and equal to their"
+                print*, "information are printed to command line and can be optionally saved to a file"
+                print*, "using the 'outsave' option. The generation can be 'weighted' manner, meaning"
+                print*, "all events are accepted but stored witha  weight < 1 and equal to their"
                 print*, "acceptance probability."
                 print*, ""
                 print*, "The Monte Carlo generator requires a configuration input card to be"
-                print*, "given as input (e.g. '$./toygenerator path/to/inputcard'). The input card"
+                print*, "given as input (USAGE: '$./toygenerator path/to/inputcard'). The input card"
                 print*, "should be a column file with no header. Each variable is separated by an"
-                print*, "arbitrary number of spaces from its variable. Nothing is read after the"
+                print*, "arbitrary number of spaces from its value. Nothing is read after the"
                 print*, "first empty line. Before running the generator, compile with '$make'."
                 print*, ""
                 print*, "Required input:"
@@ -123,6 +123,7 @@ module inputs
                 print*, ""
                 print*, "Optional input:"
                 print*, ""
+                print*, "* outsave : path to file where generator output information should be written"
                 print*, "* evsave : path to file where events should be written"
                 print*, "* histsave : path to file where histograms should be written"
                 print*, "* weight : generation mode, whether weighted ('y','yes') or not ('n','no'). When enabled, "
@@ -258,6 +259,9 @@ module inputs
                             print*, ""
                             stop
                         endif
+
+                    else if (opt == 'outsave') then
+                        outsave = trim(optval)
 
                     else if (opt == 'evsave') then
                         evsave = trim(optval)
@@ -818,7 +822,7 @@ module eventgen
         subroutine allocarrays
             arraylen = max(ngen,nmax)
 
-            allocate(pmu1(arraylen,0:3), stat=err) !!! Maybe only allocate the big event arrays if evsave is called
+            allocate(pmu1(arraylen,0:3), stat=err)
             if (err /= 0) then
                 print *, "pmu1 array allocation request denied, aborting!"
                 print*, ""
@@ -1395,22 +1399,22 @@ module output
                 end if
                 close(unit=hu)
             else
-                print *, 'ERROR while opening file ', evsave
+                print *, 'ERROR while opening file ', histsave
             end if
             
         end subroutine writehists
 
-        subroutine finalout
+        subroutine writeout
 
-            inquire(file="info.out", exist=exists)
+            inquire(file=outsave, exist=exists)
             if(exists) then
-                print *, "Writing this generation output to file 'info.out' (overwriting)..."
+                print *, "Writing events to file ", trim(outsave), " (overwriting)..."
                 print*, ""
             else
-                print *, "Writing this generation output to file 'info.out'..."
+                print *, "Writing events to file", trim(outsave)
                 print*, ""
             end if
-            open(newunit=ou, file="info.out", iostat=ios)
+            open(newunit=ou, file=outsave, iostat=ios)
             if (ios == 0) then
                 if ( isr .eqv. .false. ) then ! BORN CASE
                     write(ou,*) "==========================================&
@@ -1504,12 +1508,12 @@ module output
                 end if
                 close(unit=ou)
             else
-                print *, 'ERROR while opening file ', evsave
+                print *, 'ERROR while opening file ', outsave
             end if
 
             print*, "Finished writing output!"
             
-        end subroutine finalout
+        end subroutine writeout
 
 end module output
 
@@ -1588,7 +1592,7 @@ program toygenerator
 
     endif
 
-    call finalout()
+    if ( outsave /= '' )  call writeout()
 
     print*, ""
     print*, "***********************************************************************************"

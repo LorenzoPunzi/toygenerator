@@ -10,4 +10,5 @@ thmucutmax 180
 histsave hist.out
 nbins 100
 gmin 0.01
+outsave info.out
 
