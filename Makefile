@@ -1,7 +1,7 @@
 # Makefile for compiling .f90 files using gfortran
 
 # Compiler and compiler flags
-CXX = gfortran -cpp -Wall -Wextra
+CXX = gfortran -Wall -Wextra
 
 # Source files (all .f90 files in the current directory)
 SRCS = $(wildcard *.f90)

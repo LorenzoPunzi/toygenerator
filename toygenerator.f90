@@ -1,4 +1,4 @@
-module numeric
+module numeric ! Module containing constants and some numeric functions
 
     implicit none
     integer, parameter :: r14 = selected_real_kind(14,99) 
@@ -17,7 +17,7 @@ module numeric
             real(r14), intent(in) :: x
             real(r14) :: cubicroot
             
-            cubicroot = sign(1.0_r14, x)* (abs(x))**(1.0_r14/3.)
+            cubicroot = sign(1.0_r14, x)* (abs(x))**(1.0_r14/3.0_r14)
     
         end function cubicroot
 
@@ -40,7 +40,7 @@ end module numeric
 
 
 
-module inputs
+module inputs ! Module to load inputs form the input card
 
     use numeric
     implicit none
@@ -162,8 +162,13 @@ module inputs
                 read(iu, '(a)', iostat=ios) readline
                 if (ios == 0) then
                     if (readline ==' ') exit
-                    read(readline, *) opt, optval
-
+                    read(readline, *, iostat=ios) opt, optval
+                    if (ios /= 0) then
+                            print *, "Input error! Variable '", trim(opt),"' is declared without assigned &
+                            &value in input card! Aborting..."
+                            print *, ""
+                            stop
+                        endif
                     if (opt == 'cme') then
                         cmeflg = .true.
                         read(optval, *, iostat=ios) cme
@@ -173,7 +178,8 @@ module inputs
                             stop
                         endif
                         if (cme<= 0.0_r14) then
-                            print*, "Input error! Center of mass energy 'cme' MUST be positive real number [GeV]! Aborting..."
+                            print '(A, f0.3, A)', "Input error! Center of mass energy 'cme'&
+                            & MUST be positive real number [GeV]! (Given : ", cme, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -199,7 +205,8 @@ module inputs
                             stop
                         endif
                         if (seed(1)<0) then
-                            print*, "Input error! Seed of the generation 'seed' MUST be positive! Aborting..."
+                            print '(A, i0, A)', "Input error! Seed of the generation 'seed'&
+                            & MUST be positive! (Given : ", seed(1), ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -213,7 +220,8 @@ module inputs
                             stop
                         endif
                         if (nbins<=0) then
-                            print*, "Input error! Number of histogram bins 'nbins' MUST be at least 1! Aborting..."
+                            print '(A,i0,A)', "Input error! Number of histogram bins 'nbins' &
+                            & MUST be at least 1! (Given : ", nbins, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -227,7 +235,8 @@ module inputs
                             stop
                         endif
                         if (ngen<=0) then
-                            print*, "Input error! Number of generated events 'ngen' MUST be positive! Aborting..."
+                            print '(A,i0,A)', "Input error! Number of generated events 'ngen'&
+                            & MUST be positive! (Given : ", ngen, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -241,7 +250,8 @@ module inputs
                             stop
                         endif
                         if (nmax<=0) then
-                            print*, "Input error! Number of events to find maximum 'nmax' MUST be positive! Aborting..."
+                            print '(A, i0, A)', "Input error! Number of events to find maximum 'nmax'&
+                            & MUST be positive! (Given : ", nmax, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -254,7 +264,7 @@ module inputs
                             isr = .false.
                         else
                             print *, "Input error! Invalid value for 'isr' in input card.&
-                             &Only acceptable options are 'yes'/'y' and 'no'/'n'. Aborting!"
+                             & Only acceptable options are 'yes'/'y' and 'no'/'n'. Aborting!"
                             print*, ""
                             stop
                         endif
@@ -276,12 +286,11 @@ module inputs
                             stop
                         endif
                         if (thmucutmin < 0.0_r14 .or. thmucutmin > 180.0_r14) then
-                            print*, "Input error! Polar angle cut minumum for muons 'thmucutmin'&
-                             &(",thmucutmin, ") MUST be a real number between 0 and 180! Aborting..."
+                            print '(A, f0.2, A)', "Input error! Polar angle cut minumum for muons 'thmucutmin'&
+                             & MUST be a real number between 0 and 180! (Given : ", thmucutmin, ") Aborting..."
                             print *, ""
                             stop
                         endif
-
                     else if (opt == 'thmucutmax') then
                         read(optval, *, iostat=ios) thmucutmax
                         if (ios /= 0) then
@@ -290,8 +299,8 @@ module inputs
                             stop
                         endif
                         if (thmucutmax < 0.0_r14 .or. thmucutmax > 180.0_r14) then
-                            print*, "Input error! Polar angle cut maximum for muons 'thmucutmax'&
-                             &(",thmucutmax, ") MUST be a real number between 0 and 180! Aborting..."
+                            print '(A, f0.2, A)', "Input error! Polar angle cut maximum for muons 'thmucutmax'&
+                             & MUST be a real number between 0 and 180! (Given : ", thmucutmax, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -303,8 +312,8 @@ module inputs
                             stop
                         endif
                         if (thgamcutmin < 0.0_r14 .or. thgamcutmin > 180.0_r14) then
-                            print*, "Input error! Polar angle cut minumum for ISR photon 'thgamcutmin'&
-                            & (",thgamcutmin, ") MUST be a real number between 0 and 180! Aborting..."
+                            print '(A, f0.2, A)', "Input error! Polar angle cut minumum for ISR photon 'thgamcutmin'&
+                            & MUST be a real number between 0 and 180! (Given : ", thgamcutmin, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -316,8 +325,8 @@ module inputs
                             stop
                         endif
                         if (thgamcutmax < 0.0_r14 .or. thgamcutmax > 180.0_r14) then
-                            print*, "Input error! Polar angle cut maximum for ISR photon 'thgamcutmax'&
-                            & (",thgamcutmax, ") MUST be a real number between 0 and 180! Aborting..."
+                            print '(A, f0.2, A)', "Input error! Polar angle cut maximum for ISR photon 'thgamcutmax'&
+                            & MUST be a real number between 0 and 180! (Given : ", thgamcutmax, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -329,8 +338,8 @@ module inputs
                             stop
                         endif
                         if (qqcutmin < 0.0_r14) then
-                            print*, "Input error! Minimum of invariant mass squared of outgoing"&
-                            " muons 'qqcutmin' (",qqcutmin, ") MUST be positive [GeV^2]! Aborting..."
+                            print '(A, f0.3, A)', "Input error! Minimum of invariant mass squared of outgoing&
+                            & muons 'qqcutmin' MUST be positive [GeV^2]! (Given : ", qqcutmin, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -343,8 +352,8 @@ module inputs
                             stop
                         endif
                         if (qqcutmax < 0.0_r14) then
-                            print*, "Input error! Maximum of invariant mass squared of outgoing"&
-                            " muons 'qqcutmax' (",qqcutmax, ") MUST be positive [GeV^2]! Aborting..."
+                            print '(A, f0.3, A)', "Input error! Maximum of invariant mass squared of outgoing"&
+                            " muons 'qqcutmax' MUST be positive [GeV^2]! (Given : ", qqcutmax, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -357,8 +366,8 @@ module inputs
                             stop
                         endif
                         if (gmin < 0.0_r14) then
-                            print*, "Input error! Minimum energy of isr photon"&
-                            " 'gmin' (",gmin, ") MUST be positive [GeV]! Aborting..."
+                            print '(A, f0.3, A)', "Input error! Minimum energy of isr photon"&
+                            " 'gmin' MUST be positive [GeV]! (Given : ", gmin, ") Aborting..."
                             print *, ""
                             stop
                         endif
@@ -370,45 +379,7 @@ module inputs
                 end if
             end do
 
-
-            ! Processing of loaded input
-
-            sinv = cme**2
-            if (isr .eqv. .true.) qqmax = sinv-2.0_r14*sqrt(sinv)*gmin ! Maximum invariant mass squared of the mu-mu system
-            costhgammin = cos(radtodeg*thgamcutmax)
-            costhgammax = cos(radtodeg*thgamcutmin)
-            costhmumin = cos(radtodeg*thmucutmax)
-            costhmumax = cos(radtodeg*thmucutmin)
-
-            if (qqcutmaxflg .eqv. .false.) qqcutmax = sinv 
-
-            if (thmucutmin >= thmucutmax) then
-                print '(A, f0.2, A, f0.2, A)', "Input error! 'thmucutmin' value (", thmucutmin, ")&
-                &must be lower than 'thmucutmax' value (", thmucutmin, ")"
-                print *, ""
-                stop    
-            endif
-
-            if (thgamcutmin >= thgamcutmax) then
-                print '(A, f0.2, A, f0.2, A)', "Input error! 'thgamcutmin' value (", thgamcutmin, ")&
-                &must be lower than 'thgamcutmax' value (", thgamcutmax, ")"
-                print *, ""
-                stop    
-            endif
-
-            if (qqcutmin >= qqcutmax .and. qqcutmax >= 0) then
-                print '(A, f0.2, A, f0.2, A)', "Input error! 'qqcutmin' value (", qqcutmin, ") must &
-                &be lower than 'qqcutmax' value (", qqcutmax, ")"
-                print *, ""
-                stop    
-            endif
-
-            if (qqcutmin >= sinv) then
-                print '(A, f0.2, A, f0.2, A)', "Input error! 'qqcutmin' value &
-                &(", qqcutmin, ") must be lower than 'cme' value squared (", sinv, ")"
-                print *, ""
-                stop    
-            endif
+            ! Checking the presence of required options
 
             if ( seedflg .eqv. .false. ) then
                 print*, "No value given for generation seed 'seed' in input card! Aborting..."
@@ -420,13 +391,11 @@ module inputs
                 print*, ""
                 stop
             end if
-
             if ( cmeflg .eqv. .false. ) then
                 print*, "No value given for center of mass energy [GeV] 'cme' in input card! Aborting..."
                 print*, ""
                 stop
             end if
-
             if ( ngenflg .eqv. .false. ) then
                 print*, "No value given for number of events to generate 'ngen' in input card! Aborting..."
                 print*, ""
@@ -444,10 +413,69 @@ module inputs
                 stop
             end if
             if ( (histsave /= '') .and. (nbinflg .eqv. .false.) ) then
-                print*, "No bin number for the histograms 'nbin' given in input card! Aborting..."
+                print*, "No bin number for the histograms 'nbin' given in input card! Either&
+                & provide the number of bins or remove the 'histsave' option. Aborting..."
                 print*, ""
                 stop
             end if
+
+            ! Processing of loaded input
+
+            sinv = cme**2
+            costhgammin = cos(radtodeg*thgamcutmax)
+            costhgammax = cos(radtodeg*thgamcutmin)
+            costhmumin = cos(radtodeg*thmucutmax)
+            costhmumax = cos(radtodeg*thmucutmin)
+
+            if (qqcutmaxflg .eqv. .false.) qqcutmax = sinv 
+
+            if (thmucutmin >= thmucutmax) then
+                print '(A, f0.2, A, f0.2, A)', "Input error! 'thmucutmin' value (", thmucutmin, ")&
+                & must be lower than 'thmucutmax' value (", thmucutmax, "). Aborting..."
+                print *, ""
+                stop    
+            endif
+
+
+            if (qqcutmin >= sinv) then
+                print '(A, f0.2, A, f0.2, A)', "Input error! 'qqcutmin' value &
+                &(", qqcutmin, ") must be lower than 'cme' value squared (", sinv, "). Aborting..."
+                print *, ""
+                stop    
+            endif
+
+            if (qqcutmin >= qqcutmax) then
+                print '(A, f0.2, A, f0.2, A)', "Input error! 'qqcutmin' value (", qqcutmin, ") must &
+                &be lower than 'qqcutmax' value (", qqcutmax, "). Aborting..."
+                print *, ""
+                stop    
+            endif
+
+            if (isr .eqv. .true.) then
+
+                qqmax = sinv-2.0_r14*sqrt(sinv)*gmin ! Maximum invariant mass squared of the mu-mu system
+
+                if (qqmax <= 0) then
+
+                    print '(A, f0.3, A, f0.3, A)', "Value error! Value of 'gmin' (", gmin ,") too high with&
+                    & respect to 'cme' (", cme ,")! Aborting..."
+                    print*, ""
+                    stop
+
+                endif
+                
+                if (thgamcutmin >= thgamcutmax) then
+                    print '(A, f0.2, A, f0.2, A)', "Input error! 'thgamcutmin' value (", thgamcutmin, ")&
+                    & must be lower than 'thgamcutmax' value (", thgamcutmax, ")"
+                    print *, ""
+                    stop    
+                endif
+            
+            
+            endif 
+            
+
+            
 
         close(unit=iu)
 
@@ -514,12 +542,12 @@ module inputs
 
 end module inputs
 
-module utilities
+module utilities ! Module containing some miscellaneous functions
     use numeric
     implicit none
 
     contains
-        function inverseCDF(x)
+        function inverseCDF(x) ! Inverse cumulative distribution function of pdf proportional to (1+cos^2theta)
             real(r14), intent(in) :: x
             real(r14) :: inverseCDF
             
@@ -528,7 +556,7 @@ module utilities
     
         end function inverseCDF
 
-        subroutine deboost(boosted, boostvector, deboosted, ii)
+        subroutine deboost(boosted, boostvector, deboosted, ii) ! Lorentz deboost of a 4-vector
 
             real(r14), intent(inout) :: boosted(0:)
             real(r14), intent(inout) :: boostvector(0:)
@@ -569,20 +597,20 @@ module utilities
             lormtrx(3,0) = -gamma * beta * boostcosth
 
             ! Spatial-spatial components
-            lormtrx(1,1) = 1.0_r14+ (gamma-1.)*(boostsinth**2 * boostcosphi**2)
-            lormtrx(1,2) = (gamma-1.)*(boostsinth**2 * boostcosphi * boostsinphi)
-            lormtrx(1,3) = (gamma-1.)*(boostsinth * boostcosth * boostcosphi)
+            lormtrx(1,1) = 1.0_r14+ (gamma-1.0_r14)*(boostsinth**2 * boostcosphi**2)
+            lormtrx(1,2) = (gamma-1.0_r14)*(boostsinth**2 * boostcosphi * boostsinphi)
+            lormtrx(1,3) = (gamma-1.0_r14)*(boostsinth * boostcosth * boostcosphi)
 
-            lormtrx(2,1) = (gamma-1.)*(boostsinth**2 * boostcosphi * boostsinphi)
-            lormtrx(2,2) = 1.0_r14+ (gamma-1.)*(boostsinth**2 * boostsinphi**2)
-            lormtrx(2,3) = (gamma-1.)*(boostsinth * boostcosth * boostsinphi)
+            lormtrx(2,1) = (gamma-1.0_r14)*(boostsinth**2 * boostcosphi * boostsinphi)
+            lormtrx(2,2) = 1.0_r14+ (gamma-1.0_r14)*(boostsinth**2 * boostsinphi**2)
+            lormtrx(2,3) = (gamma-1.0_r14)*(boostsinth * boostcosth * boostsinphi)
 
-            lormtrx(3,1) = (gamma-1.)*(boostsinth * boostcosth * boostcosphi)
-            lormtrx(3,2) = (gamma-1.)*(boostsinth * boostcosth * boostsinphi)
-            lormtrx(3,3) = 1.0_r14+ (gamma-1.)*(boostcosth**2)
+            lormtrx(3,1) = (gamma-1.0_r14)*(boostsinth * boostcosth * boostcosphi)
+            lormtrx(3,2) = (gamma-1.0_r14)*(boostsinth * boostcosth * boostsinphi)
+            lormtrx(3,3) = 1.0_r14+ (gamma-1.0_r14)*(boostcosth**2)
 
             do k = 0, 3
-                deboosted(ii,k) = 0.
+                deboosted(ii,k) = 0.0_r14
                 do j = 0, 3
                     deboosted(ii,k) = deboosted(ii,k)+lormtrx(k,j)*boosted(j)
                 enddo
@@ -591,7 +619,7 @@ module utilities
             
         end subroutine deboost
 
-        real(r14) function metric(mu,nu)
+        real(r14) function metric(mu,nu) ! Metric tensor
             integer :: mu,nu
             if (mu /= nu) then
                 metric = 0.0_r14
@@ -611,7 +639,7 @@ end module utilities
 
 
 
-module histogram
+module histogram ! Module to deal with histograms
 
     use numeric
     use inputs
@@ -742,7 +770,7 @@ module histogram
             
         end subroutine updatehist
 
-        subroutine endhistisr(hist,histmin,histmax)
+        subroutine endhistisr(hist,histmin,histmax) ! Calculate bin errors and transform into differential cross section
             real(r14), intent(inout) :: hist(0:,:) 
             real(r14), intent(in) :: histmin, histmax
             integer :: bb
@@ -756,7 +784,7 @@ module histogram
             enddo
         end subroutine endhistisr
 
-        subroutine endhistborn(hist,histmin,histmax)
+        subroutine endhistborn(hist,histmin,histmax) ! Calculate bin errors and transform into differential cross section
             real(r14), intent(inout) :: hist(0:,:) 
             real(r14), intent(in) :: histmin, histmax
             integer :: bb
@@ -797,7 +825,7 @@ module histogram
 
 end module histogram
 
-module eventgen
+module eventgen ! Module responsible for generating each event
 
     use numeric
     use inputs
@@ -1026,7 +1054,7 @@ module eventgen
                 endif       
             else
                 if (wghtopt .eqv. .false.) accpt(iev) = 0
-                if (wghtopt .eqv. .true.) wght(iev) = -999
+                if (wghtopt .eqv. .true.) wght(iev) = -1
             endif            
             
         end subroutine genisr
@@ -1195,13 +1223,14 @@ module eventgen
             
         end subroutine buildampl
 
-        subroutine testcuts()
+        subroutine testcuts() ! Apply the cuts required
 
             logical :: log1, log2, log3, log4
 
             if(isr .eqv. .false.) then
 
-                if ( costhmu1(iev) <= cos(thmucutmin * degtorad) .and. costhmu1(iev) >= cos(thmucutmax * degtorad)) then
+                if ( costhmu1(iev) <= cos(thmucutmin * degtorad) .and. costhmu1(iev) >= cos(thmucutmax * degtorad) &
+                .and. costhmu2(iev) <= cos(thmucutmin * degtorad) .and. costhmu2(iev) >= cos(thmucutmax * degtorad)) then
                     accepted = .true.
                 else
                     accepted = .false.
@@ -1211,7 +1240,8 @@ module eventgen
 
             if(isr .eqv. .true.) then
                 
-                log1 = costhmu1(iev) <= cos(thmucutmin * degtorad) .and. costhmu1(iev) >= cos(thmucutmax * degtorad)
+                log1 = costhmu1(iev) <= cos(thmucutmin * degtorad) .and. costhmu1(iev) >= cos(thmucutmax * degtorad)&
+                .and. costhmu2(iev) <= cos(thmucutmin * degtorad) .and. costhmu2(iev) >= cos(thmucutmax * degtorad)
                 log2 = qqcutmin <= qq(iev) .and. qq(iev) <= qqcutmax
                 log3 = pgam(iev,0) >= gmin
                 log4 = costhgam(iev) <= cos(thgamcutmin * degtorad) .and. costhgam(iev) >= cos(thgamcutmax * degtorad)
@@ -1227,9 +1257,9 @@ module eventgen
         end subroutine testcuts
     
 
-end module eventgen
+end module eventgen 
 
-module output
+module output ! Module to write output to files and command line
 
     use numeric
     use inputs
@@ -1332,6 +1362,9 @@ module output
             character(len=*) :: histname
             integer :: bb, outunit
 
+            write(outunit, *) ""
+            write(outunit, *) "****************************************************************"
+            write(outunit, *) ""
             write(outunit, *) histname
             write(outunit, '(*(A12, 4x))') "binlow", "binhigh", "content", "error"
             write (outunit,'(*(f12.3, 4x))') histmin, histmin, hist(0,1), hist(0,2)
@@ -1341,6 +1374,7 @@ module output
                 write (outunit,'(*(f12.3, 4x))') xlow, xhigh, hist(bb,1), hist(bb,2)
             enddo          
             write (outunit,'(*(f12.3, 4x))') histmax, histmax, hist(nbins+1,1), hist(nbins+1,2)
+            write(outunit, *) ""
             
         end subroutine appendhist
 
@@ -1369,9 +1403,9 @@ module output
                     write(hu,'(A, i0, A, f0.2, A)') "   Born generation using seed = ", seed(1), " at center of mass&
                     & energy = ", cme, " GeV"
                     write(hu,*) ""
-                    call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
-                    call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
-                    call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
+                    call appendhist(hu, h_pmod1, "p modulus mu-", 0.0_r14, pmodmu_max)
+                    call appendhist(hu, h_emu1, "Energy mu-", 0.0_r14, enemu_max)
+                    call appendhist(hu, h_thmu1, "Theta mu-", 0.0_r14, 180.0_r14)
                 end if
                 if ( isr .eqv. .true. ) then
                     call endisrhistos()
@@ -1385,15 +1419,15 @@ module output
                     write(hu,'(A, i0, A, f0.2, A)') "   ISR generation using seed = ", seed(1), " at center of mass&
                     & energy = ", cme, " GeV"
                     write(hu,*) ""
-                    call appendhist(hu, h_pmod1, "h_pmod1", 0.0_r14, pmodmu_max)
-                    call appendhist(hu, h_emu1, "h_emu1", 0.0_r14, enemu_max)
-                    call appendhist(hu, h_thmu1, "h_thmu1", 0.0_r14, 180.0_r14)
-                    call appendhist(hu, h_pmod2, "h_pmod2", 0.0_r14, pmodmu_max)
-                    call appendhist(hu, h_emu2, "h_emu2", 0.0_r14, enemu_max)
-                    call appendhist(hu, h_thmu2, "h_thmu2", 0.0_r14, 180.0_r14)
-                    call appendhist(hu, h_pgam, "h_pgam", 0.0_r14, pgam_max)
-                    call appendhist(hu, h_thgam, "h_thgam", 0.0_r14, 180.0_r14)
-                    call appendhist(hu, h_qq, "h_qq", 0.0_r14, qqmax)
+                    call appendhist(hu, h_pmod1, "p modulus mu-", 0.0_r14, pmodmu_max)
+                    call appendhist(hu, h_emu1, "Energy mu-", 0.0_r14, enemu_max)
+                    call appendhist(hu, h_thmu1, "Theta mu-", 0.0_r14, 180.0_r14)
+                    call appendhist(hu, h_pmod2, "p modulus mu+", 0.0_r14, pmodmu_max)
+                    call appendhist(hu, h_emu2, "Energy mu+", 0.0_r14, enemu_max)
+                    call appendhist(hu, h_thmu2, "Theta mu+", 0.0_r14, 180.0_r14)
+                    call appendhist(hu, h_pgam, "p modulus ISR gamma", 0.0_r14, pgam_max)
+                    call appendhist(hu, h_thgam, "Theta ISR gamma", 0.0_r14, 180.0_r14)
+                    call appendhist(hu, h_qq, "mu-mu invariant mass squared", 0.0_r14, qqmax)
                     
                 end if
                 close(unit=hu)
@@ -1553,7 +1587,7 @@ module output
 end module output
 
 
-program toygenerator
+program toygenerator ! Main program
     use numeric
     use inputs
     use histogram
@@ -1582,7 +1616,7 @@ program toygenerator
         if (histsave /= '') call writehists()
 
         bornsigma = gev2nbarn*4.0_r14*pi/3.0_r14*alpha**2/sinv
-        eff = dble(naccpt)/ngen
+        eff = naccpt/ngen
         sigma = bornsigma * eff
         dsigma = bornsigma/ngen * sqrt(ngen * eff * (1-eff))
         
@@ -1593,7 +1627,7 @@ program toygenerator
         if (histsave /= '') call inithistsisr()
         run = 1
 
-        do iev = 1, nmax 
+        do iev = 1, nmax ! First loop on nmax events to fine integrand maximum
              call random_number(rndm)
              call genisr()
             
@@ -1602,7 +1636,7 @@ program toygenerator
         run = 2
         intemax = tmpintemax
 
-        do iev = 1, ngen
+        do iev = 1, ngen ! Second loop to actually generate events
 
             call random_number(rndm)
             call genisr()
@@ -1616,13 +1650,13 @@ program toygenerator
         eff = naccpt/ngen
         sigma = intemax * eff
         if ( wghtopt .eqv. .true. ) then
-            dsigma = 0
+            dsigma = 0.0_r14
             do iev = 1, ngen
-                dsigma = dsigma + intemax**2/(ngen*(ngen-1))*(wght(iev)-naccpt/ngen)**2
+                if (wght(iev) >= 0) dsigma = dsigma + (wght(iev)-naccpt/ngen)**2
             end do
-            dsigma = sqrt(dsigma)
+            dsigma = intemax*sqrt(dsigma/(ngen*(ngen-1.0_r14)))
         else 
-            dsigma = intemax/ngen * sqrt(ngen * eff * (1-eff))
+            dsigma = intemax/ngen * sqrt(ngen * eff * (1.0_r14-eff))
         end if
 
     endif
